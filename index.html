@@ -15,6 +15,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icone-192.png">
 <link rel="apple-touch-icon" href="icone-192.png">
+<script>
+  /* O navegador avisa que dá para instalar antes de o app terminar de carregar.
+     Guarda o aviso aqui, senão o botão "Instalar" nunca teria o que disparar. */
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault(); window.__pedidoInstalar = e;
+    window.dispatchEvent(new Event('kit-instalavel'));
+  });
+</script>
 <style>
   /* Fundo preto de verdade: em tela OLED gasta menos bateria, e bateria é o que falta numa emergência. */
   :root{
@@ -69,6 +77,16 @@
   .btn:disabled{opacity:.5; cursor:default}
   .link{background:none; border:0; padding:8px 4px; min-height:44px; color:var(--sinal); font-weight:600; text-decoration:underline; text-underline-offset:3px}
   .link.perigo{color:var(--erro)}
+
+  /* instalar no aparelho */
+  .cartao.instalar{border-color:var(--sinal); background:#1d1408; display:grid; grid-template-columns:44px 1fr; gap:4px 12px; align-items:start}
+  .cartao.instalar .ic{width:44px; height:44px; border-radius:12px; background:var(--sinal); color:var(--sinalTexto); display:grid; place-items:center; grid-row:1 / span 3}
+  .cartao.instalar .ic svg{width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+  .cartao.instalar h2{margin:0; font-size:17px}
+  .cartao.instalar p{margin:0; font-size:14px; color:var(--texto)}
+  .cartao.instalar ol{margin:6px 0 0; padding-left:20px; font-size:14px; line-height:1.5}
+  .cartao.instalar ol li{margin-bottom:4px}
+  .cartao.instalar .btn{margin-top:10px; justify-self:start}
 
   /* escolha da IA */
   .opcoes{display:grid; gap:10px; margin:12px 0 14px}
@@ -166,6 +184,7 @@
 
       <div id="avisoQueda" class="aviso ruim" hidden></div>
       <div id="avisoSemGPU" class="aviso ruim" hidden></div>
+      <div class="lugar-instalar"></div>
 
       <div class="cartao">
         <h2>Escolha o tamanho</h2>
@@ -225,6 +244,7 @@
   <!-- APARELHO -->
   <section class="aba" id="abaAparelho" aria-label="Aparelho">
     <h1>Pronto para o modo avião?</h1>
+    <div class="lugar-instalar"></div>
     <div class="cartao">
       <ul class="lista" id="listaPronto"></ul>
       <p class="mini fraco" id="dicaAviao" style="margin:12px 0 0"></p>

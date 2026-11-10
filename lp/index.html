@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kit Offline — IA e biblioteca médica sem internet</title>
+<meta name="description" content="Uma inteligência artificial e uma biblioteca médica que funcionam sem internet, direto no celular ou no computador. Instale grátis pelo link.">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kit Offline — quando a internet cai, ele continua">
+<meta property="og:description" content="IA e biblioteca médica que funcionam sem internet, direto no aparelho. Instale grátis pelo link.">
+<meta property="og:image" content="https://eugeniofim.github.io/kit-offline/lp/video/capa.jpg">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icone-192.png">
+<link rel="apple-touch-icon" href="../icone-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="modulepreload" href="vendor/three.module.min.js">
+<style>
+  :root{
+    --fundo:#000; --chao:#0d1014; --linha:#262d36;
+    --texto:#f3efe8; --fraco:#a3abb5; --sinal:#ff8a1f; --sinalTexto:#1a0d00; --ok:#46d68a;
+    --titulo:"Sora", ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --margem:clamp(20px, 7vw, 112px);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth; background:#000}
+  body{
+    margin:0; background:var(--fundo); color:var(--texto);
+    font:17px/1.55 ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:transparent;
+    overflow-x:hidden;
+  }
+  a{color:inherit}
+  :focus-visible{outline:2px solid var(--sinal); outline-offset:3px; border-radius:6px}
+
+  #cena{position:fixed; inset:0; width:100vw; height:100vh; height:100lvh; z-index:0; display:block; pointer-events:none}
+  .sem3d #cena, html:not(.js) #cena{display:none}
+  .sem3d body, html:not(.js) body{background:radial-gradient(90vmax 70vmax at 72% 30%, rgba(255,138,31,.16), transparent 60%) #000 fixed}
+
+  /* topo fixo */
+  .cabeca{
+    position:fixed; z-index:5; top:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:calc(env(safe-area-inset-top, 0px) + 12px) clamp(16px, 4vw, 44px) 14px;
+    background:linear-gradient(rgba(0,0,0,.82), rgba(0,0,0,0));
+  }
+  .marca{display:flex; align-items:center; gap:10px; font-weight:700; text-decoration:none; min-height:44px}
+  .marca small{font-weight:600; font-size:12px; color:var(--sinal); border:1px solid var(--sinal); border-radius:99px; padding:1px 8px}
+  .farol{width:10px; height:10px; border-radius:50%; background:var(--sinal); box-shadow:0 0 0 4px rgba(255,138,31,.2)}
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:56px; padding:0 26px;
+    border-radius:16px; border:1px solid var(--linha); background:rgba(21,26,32,.82); color:var(--texto);
+    font-weight:700; font-size:17px; text-decoration:none; cursor:pointer; transition:transform .18s ease, box-shadow .25s ease, background .2s;
+  }
+  .btn svg{width:22px; height:22px; flex:none; stroke:currentColor; fill:none; stroke-width:2.1; stroke-linecap:round; stroke-linejoin:round}
+  .btn.pri{background:var(--sinal); border-color:var(--sinal); color:var(--sinalTexto); box-shadow:0 10px 40px -8px rgba(255,138,31,.55)}
+  .btn.peq{min-height:44px; padding:0 18px; font-size:15px; border-radius:13px}
+  @media (hover:hover){ .btn:hover{transform:translateY(-2px)} .btn.pri:hover{box-shadow:0 16px 48px -8px rgba(255,138,31,.7)} }
+  .btn:active{transform:translateY(0) scale(.985)}
+
+  main{position:relative; z-index:1}
+  section{position:relative}
+  .palco{min-height:100svh; display:flex; align-items:center; padding:96px var(--margem) 48px}
+  .js .alto{height:var(--alt)}
+  .js .alto .palco{position:sticky; top:0; height:100svh; min-height:0}
+  .dir .palco{justify-content:flex-end}
+  .meio .palco, .palco.meio{justify-content:center}
+
+  .texto{position:relative; width:100%; max-width:560px}
+  .texto::before{content:""; position:absolute; inset:-70px -90px; z-index:-1; pointer-events:none;
+    background:radial-gradient(closest-side, rgba(0,0,0,.78), rgba(0,0,0,0))}
+
+  .olho{margin:0 0 14px; font-size:13px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--sinal)}
+  h1,h2{font-family:var(--titulo); font-weight:800; letter-spacing:-.035em; margin:0; text-wrap:balance}
+  h1{font-size:clamp(40px, 5.7vw, 82px); line-height:1.02}
+  h1 .l2{display:block; color:#5d6570; transition:color .7s ease, text-shadow .7s ease}
+  h1 .l2.acesa, html:not(.js) h1 .l2{color:var(--sinal); text-shadow:0 0 44px rgba(255,138,31,.5)}
+  h2{font-size:clamp(28px, 3.5vw, 50px); line-height:1.08}
+  .sub{margin:20px 0 0; font-size:clamp(17px, 1.5vw, 21px); color:var(--fraco); max-width:30em}
+  .acoes{display:flex; flex-wrap:wrap; gap:12px; margin-top:28px}
+  .mini{margin:14px 0 0; font-size:14px; color:var(--fraco)}
+  .curto{display:none}
+  #final h2{max-width:11em}
+
+  .role{position:absolute; left:50%; bottom:22px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:2px;
+    font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--fraco); transition:opacity .4s}
+  .role svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; animation:desce 1.6s ease-in-out infinite}
+  .rolou .role{opacity:0}
+  @keyframes desce{0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)}}
+
+  /* as três ideias, uma de cada vez */
+  .beat p:not(.olho), .passos span{color:var(--fraco)}
+  .beat p:not(.olho){margin:14px 0 0; font-size:clamp(17px, 1.4vw, 20px)}
+  .js .beats{display:grid}
+  .js .beat{grid-area:1 / 1; opacity:0; transform:translateY(18px); transition:opacity .45s ease, transform .55s cubic-bezier(.2,.7,.2,1); pointer-events:none}
+  .js .beat.on{opacity:1; transform:none; pointer-events:auto}
+  html:not(.js) .beat{margin-bottom:36px}
+  .pontos{display:flex; gap:8px; margin-top:26px}
+  .pontos i{width:34px; height:4px; border-radius:99px; background:var(--linha); transition:background .35s}
+  .pontos i.on{background:var(--sinal)}
+  html:not(.js) .pontos{display:none}
+
+  /* três passos */
+  .passos{list-style:none; counter-reset:p; margin:26px 0 0; padding:0; display:grid; gap:18px}
+  .passos li{counter-increment:p; display:grid; grid-template-columns:44px 1fr; column-gap:16px; align-items:center}
+  .passos li::before{content:counter(p); grid-row:1 / span 2; width:44px; height:44px; border-radius:50%; border:1.5px solid #3a424d;
+    display:grid; place-items:center; font-weight:700; color:var(--fraco); transition:background .35s, border-color .35s, color .35s}
+  .passos li.feito::before{content:"✓"; background:var(--ok); border-color:var(--ok); color:#04150b}
+  .passos b{font-size:19px; line-height:1.3}
+  .passos span{grid-column:2; font-size:16px; line-height:1.4}
+
+  /* vídeo */
+  .bloco-video{display:flex; align-items:center; justify-content:center; gap:clamp(28px, 6vw, 88px); width:100%}
+  .bloco-video .texto{max-width:420px}
+  .quadro{flex:none; height:min(72svh, 680px); aspect-ratio:9 / 16; border-radius:26px; overflow:hidden; background:var(--chao);
+    border:1px solid var(--linha); box-shadow:0 30px 90px -20px rgba(255,138,31,.35)}
+  .quadro video{width:100%; height:100%; display:block; object-fit:cover; background:#000}
+
+  /* fecho */
+  .qr{display:none; align-items:center; gap:16px; margin-top:22px; color:var(--fraco); font-size:15px; max-width:340px}
+  .qr svg{width:104px; height:104px; flex:none; border-radius:10px; background:#fff; padding:6px}
+  .notas{list-style:none; margin:30px 0 0; padding:18px 0 0; border-top:1px solid var(--linha); display:grid; gap:10px; font-size:15px; color:var(--fraco)}
+  .notas li{padding-left:18px; position:relative}
+  .notas li::before{content:""; position:absolute; left:0; top:.62em; width:6px; height:6px; border-radius:50%; background:var(--sinal)}
+  .notas b{color:var(--texto); font-weight:650}
+  .rodape{margin:22px 0 0; font-size:13px; color:#7d8691}
+  .rodape a{text-underline-offset:3px}
+
+  @media (min-width:900px) and (hover:hover){ .qr{display:flex} }
+
+  /* celular em pé: o texto vira um cartão embaixo e o aparelho 3D fica em cima */
+  @media (max-aspect-ratio: 9/10){
+    .palco{align-items:flex-end; padding:84px 14px calc(env(safe-area-inset-bottom, 0px) + 18px)}
+    #topo .palco{align-items:flex-start; padding:calc(env(safe-area-inset-top, 0px) + 84px) 20px 0}
+    .texto{max-width:none}
+    .texto::before{display:none}
+    .cartao{background:rgba(7,9,12,.9); border:1px solid var(--linha); border-radius:22px; padding:18px 18px 16px;
+      -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px)}
+    h1{font-size:clamp(36px, 10.4vw, 46px)}
+    h2{font-size:clamp(24px, 6.6vw, 30px)}
+    .sub{margin-top:14px; font-size:16.5px}
+    .acoes{margin-top:18px; gap:10px; flex-wrap:nowrap}
+    .acoes .btn{padding:0 16px}
+    .acoes .btn.pri{flex:1 1 auto}
+    .longo{display:none} .curto{display:inline}
+    #final h2{max-width:none}
+    .beat p:not(.olho){margin-top:10px; font-size:16px; line-height:1.45}
+    .olho{margin-bottom:10px; font-size:12px}
+    .pontos{margin-top:16px}
+    .passos{margin-top:16px; gap:12px}
+    .passos b{font-size:17px} .passos span{font-size:14.5px}
+    .role{display:none}
+    .bloco-video{flex-direction:column; gap:14px; text-align:center}
+    .bloco-video .texto{max-width:none}
+    .bloco-video .olho{margin-bottom:6px}
+    .quadro{height:min(62svh, 560px); border-radius:22px}
+    #video .palco{align-items:center; padding-top:76px}
+    .notas{margin-top:18px; padding-top:14px; font-size:14px; gap:8px}
+    .rodape{margin-top:14px; font-size:12px}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    *{animation:none !important; transition:none !important}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="cena" aria-hidden="true"></canvas>
+
+<header class="cabeca">
+  <a class="marca" href="#topo"><span class="farol" aria-hidden="true"></span>Kit Offline <small>teste</small></a>
+  <a class="btn peq" href="../" data-instalar><span>Instalar</span></a>
+</header>
+
+<main>
+
+  <section id="topo" class="alto" style="--alt:185svh">
+    <div class="palco">
+      <div class="texto">
+        <p class="olho">IA + biblioteca médica · sem internet</p>
+        <h1>Quando a internet cai, <span class="l2" id="l2">ele continua.</span></h1>
+        <p class="sub">Uma inteligência artificial que responde sem sinal, direto no seu celular ou computador.</p>
+        <div class="acoes">
+          <a class="btn pri" href="../" data-instalar>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg>
+            <span>Instalar grátis</span>
+          </a>
+          <a class="btn" href="#video" id="verVideo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg>
+            <span class="longo">Ver o vídeo</span><span class="curto" aria-hidden="true">Vídeo</span>
+          </a>
+        </div>
+        <p class="mini">Sem loja de aplicativos. Sem cadastro.</p>
+      </div>
+      <div class="role" aria-hidden="true">role<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+    </div>
+  </section>
+
+  <section id="dentro" class="alto" style="--alt:235svh">
+    <div class="palco">
+      <div class="texto cartao">
+        <div class="beats">
+          <article class="beat on">
+            <p class="olho">1 de 3 · IA no aparelho</p>
+            <h2>Você pergunta. Ela responde sem internet.</h2>
+            <p>A inteligência artificial roda dentro do aparelho. O que você escreve não sai dele.</p>
+          </article>
+          <article class="beat">
+            <p class="olho">2 de 3 · Biblioteca médica</p>
+            <h2>32 mil artigos de medicina no bolso.</h2>
+            <p>É a Wikipédia de medicina, pelo Kiwix. A resposta mostra de onde veio.</p>
+          </article>
+          <article class="beat">
+            <p class="olho">3 de 3 · Modo avião</p>
+            <h2>Sem sinal, continua funcionando.</h2>
+            <p>Você baixa uma vez no Wi‑Fi. Depois não depende de mais nada.</p>
+          </article>
+        </div>
+        <div class="pontos" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="passos" class="alto dir" style="--alt:175svh">
+    <div class="palco">
+      <div class="texto cartao">
+        <p class="olho">Como deixar pronto</p>
+        <h2>Três passos, uma vez só.</h2>
+        <ol class="passos" id="listaPassos">
+          <li><b>Instale pelo link</b><span>Um toque. Não passa por loja de aplicativos.</span></li>
+          <li><b>Baixe no Wi‑Fi</b><span>A IA (a partir de 600 MB) e a biblioteca (116 MB).</span></li>
+          <li><b>Teste em modo avião</b><span>Respondeu? Está pronto para quando precisar.</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="video">
+    <div class="palco meio">
+      <div class="bloco-video">
+        <div class="texto">
+          <p class="olho">Em meio minuto</p>
+          <h2>Veja funcionando.</h2>
+        </div>
+        <div class="quadro">
+          <video id="filme" controls playsinline preload="metadata" poster="video/capa.jpg" aria-label="Vídeo: Kit Offline em meio minuto">
+            <source src="video/kit-offline.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="final">
+    <div class="palco">
+      <div class="texto cartao">
+        <h2>Deixe pronto antes de precisar.</h2>
+        <div class="acoes">
+          <a class="btn pri" href="../" data-instalar>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg>
+            <span>Instalar grátis</span>
+          </a>
+        </div>
+        <div class="qr">
+          <svg role="img" aria-label="Código QR que abre o Kit Offline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 31 31" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h31v31H0z"/><path stroke="#000000" d="M1 1.5h7m4 0h1m1 0h1m2 0h5m1 0h7M1 2.5h1m5 0h1m3 0h1m3 0h2m2 0h1m3 0h1m5 0h1M1 3.5h1m1 0h3m1 0h1m1 0h1m2 0h2m3 0h1m1 0h1m1 0h1m1 0h1m1 0h3m1 0h1M1 4.5h1m1 0h3m1 0h1m1 0h1m1 0h6m1 0h1m2 0h1m1 0h1m1 0h3m1 0h1M1 5.5h1m1 0h3m1 0h1m1 0h3m2 0h1m2 0h1m2 0h2m1 0h1m1 0h3m1 0h1M1 6.5h1m5 0h1m1 0h2m5 0h1m4 0h1m1 0h1m5 0h1M1 7.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M9 8.5h2m4 0h1m1 0h1M1 9.5h1m1 0h5m2 0h2m1 0h4m1 0h1m1 0h1m2 0h5M4 10.5h1m1 0h1m3 0h5m2 0h1m1 0h7m3 0h1M2 11.5h1m1 0h4m1 0h2m1 0h1m1 0h6m1 0h1m1 0h3M1 12.5h2m1 0h3m2 0h3m1 0h1m3 0h1m1 0h8m1 0h1M2 13.5h1m1 0h1m2 0h2m1 0h1m2 0h3m2 0h2m6 0h2M3 14.5h1m6 0h2m5 0h9m3 0h1M2 15.5h1m1 0h2m1 0h5m1 0h1m1 0h4m3 0h3m1 0h2M1 16.5h2m1 0h1m3 0h3m4 0h3m1 0h3m2 0h2m2 0h1M1 17.5h2m1 0h4m2 0h1m1 0h3m3 0h1m1 0h1m5 0h2M1 18.5h3m1 0h1m4 0h3m1 0h1m3 0h3m1 0h4m1 0h1m1 0h1M1 19.5h1m1 0h2m2 0h3m1 0h1m1 0h4m2 0h1m1 0h1m1 0h3m1 0h1M1 20.5h1m3 0h1m2 0h4m1 0h1m1 0h3m3 0h1m1 0h3m2 0h1M1 21.5h1m2 0h1m1 0h4m2 0h1m3 0h3m1 0h6m1 0h3M9 22.5h1m1 0h2m1 0h1m2 0h3m1 0h1m3 0h5M1 23.5h7m2 0h1m2 0h6m1 0h2m1 0h1m1 0h3M1 24.5h1m5 0h1m1 0h1m2 0h3m1 0h1m3 0h2m3 0h1M1 25.5h1m1 0h3m1 0h1m1 0h1m5 0h1m2 0h2m1 0h5m1 0h3M1 26.5h1m1 0h3m1 0h1m1 0h2m1 0h3m2 0h4m3 0h1m1 0h4M1 27.5h1m1 0h3m1 0h1m1 0h2m2 0h2m1 0h3m2 0h8M1 28.5h1m5 0h1m3 0h1m1 0h1m1 0h1m5 0h1m2 0h3m1 0h1M1 29.5h7m1 0h1m2 0h1m1 0h2m2 0h1m1 0h1m1 0h4m1 0h1"/></svg>
+          <span>Está no computador? Aponte a câmera do celular para abrir lá.</span>
+        </div>
+        <ul class="notas">
+          <li><b>É uma versão de teste.</b> A IA pode errar e não substitui socorro. Em emergência, ligue 192 ou 193.</li>
+          <li><b>Pede aparelho recente.</b> iPhone atualizado, Android com Chrome, ou computador com Chrome ou Edge.</li>
+          <li><b>No iPhone,</b> instale primeiro e baixe a IA dentro do app.</li>
+        </ul>
+        <p class="rodape">Biblioteca: Kiwix / Wikipédia (CC BY‑SA). IA: WebLLM. <a href="https://github.com/Eugeniofim/kit-offline" rel="noopener">Código no GitHub</a>.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  /* Instalar: no Android e no computador (Chrome, Edge) o botão instala na hora.
+     Onde o navegador não entrega o pedido (iPhone, por exemplo), o link leva ao app,
+     que mostra o passo a passo. */
+  (function () {
+    var pedido = null, bts = document.querySelectorAll('[data-instalar]');
+    function rotulo(t) { for (var i = 0; i < bts.length; i++) { var s = bts[i].querySelector('span'); if (s) s.textContent = t; } }
+    window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); pedido = e; document.documentElement.classList.add('instalavel'); });
+    window.addEventListener('appinstalled', function () { pedido = null; rotulo('Abrir o app'); });
+    for (var i = 0; i < bts.length; i++) bts[i].addEventListener('click', function (ev) {
+      if (!pedido) return;
+      ev.preventDefault();
+      var p = pedido; pedido = null;
+      p.prompt();
+      p.userChoice.then(function (r) { if (r && r.outcome === 'accepted') rotulo('Abrir o app'); else location.href = '../'; },
+                        function () { location.href = '../'; });
+    });
+  })();
+</script>
+<script type="module" src="cena.js"></script>
+</body>
+</html>

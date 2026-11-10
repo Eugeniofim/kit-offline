@@ -6,7 +6,7 @@
 
 import * as webllm from './vendor/web-llm.js';
 
-const VERSAO = '0.1.0';
+const VERSAO = '0.2.0';
 const $ = s => document.querySelector(s);
 
 /* ───────── catálogo ───────── */
@@ -136,6 +136,76 @@ async function verPaginaGuardada() {
     EST.paginaGuardada = !!(navigator.serviceWorker && navigator.serviceWorker.controller) &&
       !!(await caches.match('./index.html')) && !!(await caches.match('./vendor/web-llm.js'));
   } catch (_) { EST.paginaGuardada = false; }
+}
+
+/* ───────── instalar no aparelho ─────────
+   Android e computador (Chrome, Edge): o navegador entrega um pedido e o botão
+   instala na hora. iPhone: a Apple não deixa instalar por botão, só ensinar.
+   Por dentro de outro app (Instagram…): não instala de jeito nenhum. */
+
+function plataforma() {
+  const ua = navigator.userAgent || '';
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/i.test(ua);
+  const embutido = /Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Line\/|; wv\)/i.test(ua);
+  const safariMac = !ios && /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome|Chromium|Edg\/|OPR\/|Firefox/.test(ua);
+  return { ios, android, embutido, safariMac };
+}
+const estaInstalado = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+let PEDIDO_INSTALAR = window.__pedidoInstalar || null;
+
+async function instalarApp() {
+  const p = PEDIDO_INSTALAR; if (!p) return;
+  try { p.prompt(); const r = await p.userChoice; EST.medidas.instalar = r && r.outcome; } catch (_) {}
+  PEDIDO_INSTALAR = null; window.__pedidoInstalar = null;
+  desenharInstalar();
+}
+
+function cartaoInstalar() {
+  if (estaInstalado()) return null;
+  const p = plataforma();
+  const icone = el('span', { class: 'ic', 'aria-hidden': 'true' });
+  icone.innerHTML = '<svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M12 7v7M9 11.5l3 3 3-3"/></svg>';
+  const monta = (titulo, ...resto) => el('div', { class: 'cartao instalar' }, icone, el('h2', { text: titulo }), ...resto);
+
+  if (p.embutido) {
+    const b = el('button', { class: 'btn', type: 'button', text: 'Copiar o endereço', onclick: async () => {
+      try { await navigator.clipboard.writeText(location.origin + location.pathname); b.textContent = 'Endereço copiado'; }
+      catch (_) { b.textContent = location.host + location.pathname; }
+    } });
+    return monta('Abra no navegador para instalar',
+      el('p', { text: 'Você abriu por dentro de outro app, e aqui o celular não deixa instalar. Toque nos três pontinhos e escolha “Abrir no navegador”.' }), b);
+  }
+  if (PEDIDO_INSTALAR) {
+    return monta('Instale no aparelho',
+      el('p', { text: 'Vira um app na tela de início, abre sem internet e o aparelho não apaga a IA sozinho.' }),
+      el('button', { class: 'btn pri', type: 'button', text: 'Instalar o app', onclick: instalarApp }));
+  }
+  if (p.ios) {
+    return monta('Instale antes de baixar a IA',
+      el('p', { text: 'No iPhone, o que é baixado no navegador não vai junto para o app. Instale primeiro:' }),
+      el('ol', {},
+        el('li', { text: 'Toque em Compartilhar (o quadrado com a seta para cima).' }),
+        el('li', { text: 'Role a lista e toque em “Adicionar à Tela de Início”.' }),
+        el('li', { text: 'Abra o Kit Offline pela tela de início e baixe a IA lá.' })));
+  }
+  if (p.android) {
+    return monta('Instale no aparelho',
+      el('p', { text: 'Toque nos três pontinhos do navegador e escolha “Instalar aplicativo” (ou “Adicionar à tela inicial”).' }));
+  }
+  if (p.safariMac) {
+    return monta('Instale no computador',
+      el('p', { text: 'No Safari, abra o menu Arquivo e escolha “Adicionar ao Dock”.' }));
+  }
+  return null;   /* computador sem instalação: não promete o que não dá */
+}
+
+function desenharInstalar() {
+  document.querySelectorAll('.lugar-instalar').forEach(l => {
+    const c = cartaoInstalar();
+    if (c) l.replaceChildren(c); else l.replaceChildren();
+  });
 }
 
 /* ───────── IA: escolher, baixar, ligar ───────── */
@@ -662,8 +732,9 @@ function desenharAparelho() {
     linha(EST.bib.pronta ? 'ok' : 'meh', 'A biblioteca está guardada no aparelho',
       EST.bib.pronta ? PACOTE.titulo : 'Opcional. Baixe na aba Biblioteca.'),
     linha(a.protegido || a.instalado ? 'ok' : 'meh', 'O aparelho não vai apagar esses arquivos sozinho',
-      a.protegido || a.instalado ? null : 'Para garantir, adicione esta página à tela de início.')
+      a.protegido || a.instalado ? null : 'Para garantir, instale o app no aparelho.')
   );
+  desenharInstalar();
   $('#dicaAviao').textContent = EST.semRede
     ? 'Simulando sem internet: a rede desta página está cortada.'
     : (EST.paginaGuardada && algumaIA.length)
@@ -858,6 +929,15 @@ async function partida() {
   window.addEventListener('offline', mostrarRede);
   mostrarRede();
 
+  window.addEventListener('kit-instalavel', () => { PEDIDO_INSTALAR = window.__pedidoInstalar || null; desenharInstalar(); });
+  window.addEventListener('appinstalled', () => {
+    PEDIDO_INSTALAR = null; window.__pedidoInstalar = null;
+    EST.aparelho.instalado = true; EST.medidas.instalar = 'instalado';
+    document.querySelectorAll('.lugar-instalar').forEach(l => l.replaceChildren());
+    desenharAparelho();
+  });
+  desenharInstalar();
+
   ligarAtualizacao();
   /* sempre avisa, ligado ou não: a simulação nunca pode ficar presa de uma abertura para a outra */
   await avisarSW({ tipo: 'semrede', ligado: EST.semRede });
@@ -881,6 +961,6 @@ async function partida() {
 }
 
 /* porta de serviço para conferência */
-window.KIT = { EST, IAS, perguntar, consultarBiblioteca, procurar, lerArtigo, montarRelatorio, avisarSW, palavrasChave };
+window.KIT = { EST, IAS, perguntar, consultarBiblioteca, procurar, lerArtigo, montarRelatorio, avisarSW, palavrasChave, plataforma, cartaoInstalar };
 
 partida();

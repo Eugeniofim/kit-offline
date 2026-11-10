@@ -2,7 +2,7 @@
    Guarda a página inteira no aparelho para abrir sem internet.
    A IA e a biblioteca NÃO passam por aqui: cada uma guarda os próprios arquivos. */
 
-const CACHE = 'kit-offline-v1';   /* SUBIR ESTE NÚMERO A CADA PUBLICAÇÃO */
+const CACHE = 'kit-offline-v2';   /* SUBIR ESTE NÚMERO A CADA PUBLICAÇÃO */
 const ESSENCIAL = [
   './',
   './index.html',
@@ -59,6 +59,8 @@ self.addEventListener('fetch', e => {
   /* as partes da biblioteca são grandes e vão direto para o arquivo no aparelho:
      guardar aqui também seria ocupar o espaço duas vezes */
   if (url.pathname.includes('/pacotes/')) return;
+  /* a página de apresentação (lp/) não é o app: fica fora do cache do app */
+  if (url.pathname.includes('/lp/')) return;
 
   const ehApp = req.mode === 'navigate' || req.destination === 'document' ||
                 /\/(index\.html)?$/.test(url.pathname);

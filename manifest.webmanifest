@@ -1,7 +1,8 @@
 {
   "name": "Kit Offline",
   "short_name": "Kit Offline",
-  "description": "IA e biblioteca que funcionam sem internet.",
+  "description": "IA e biblioteca médica que funcionam sem internet, direto no aparelho.",
+  "categories": ["utilities", "education"],
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",
