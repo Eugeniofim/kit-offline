@@ -1,0 +1,21 @@
+{
+ "nome": "medicina.zim",
+ "titulo": "Medicina",
+ "origem": "wikipedia_pt_medicine_nopic_2026-10.zim",
+ "fonte": "Kiwix / Wikipédia (CC BY-SA)",
+ "bytes": 122104382,
+ "partes": [
+  {
+   "arquivo": "parte-aa",
+   "bytes": 41943040
+  },
+  {
+   "arquivo": "parte-ab",
+   "bytes": 41943040
+  },
+  {
+   "arquivo": "parte-ac",
+   "bytes": 38218302
+  }
+ ]
+}

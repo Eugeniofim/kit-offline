@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kit Offline</title>
+<meta name="description" content="IA e biblioteca que funcionam sem internet.">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Kit Offline">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-192.png">
+<style>
+  /* Fundo preto de verdade: em tela OLED gasta menos bateria, e bateria é o que falta numa emergência. */
+  :root{
+    --fundo:#000; --chao:#0d1014; --chao2:#151a20; --linha:#262d36;
+    --texto:#f3efe8; --fraco:#a3abb5; --sinal:#ff8a1f; --sinalTexto:#1a0d00;
+    --ok:#46d68a; --erro:#ff6b5e; --raio:16px;
+    --seguro-baixo: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--fundo); color:var(--texto);
+    font:16px/1.5 ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display:flex; flex-direction:column; height:100dvh; overflow:hidden;
+    -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:transparent;
+  }
+  button,input,textarea{font:inherit; color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:2px solid var(--sinal); outline-offset:2px}
+  [hidden]{display:none !important}
+
+  .topo{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
+    border-bottom:1px solid var(--linha);
+  }
+  .marca{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.01em}
+  .marca small{font-weight:600; font-size:12px; color:var(--sinal); border:1px solid var(--sinal); border-radius:99px; padding:1px 8px}
+  .farol{width:10px; height:10px; border-radius:50%; background:var(--sinal); box-shadow:0 0 0 4px rgba(255,138,31,.18)}
+  .rede{font-size:13px; color:var(--fraco); display:flex; align-items:center; gap:6px; white-space:nowrap}
+  .rede::before{content:""; width:8px; height:8px; border-radius:50%; background:var(--ok)}
+  .rede.fora{color:var(--sinal)} .rede.fora::before{background:var(--sinal)}
+
+  main{flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch}
+  .aba{display:none; padding:16px; max-width:720px; margin:0 auto}
+  .aba.on{display:block}
+
+  h1{font-size:22px; line-height:1.25; margin:4px 0 6px; text-wrap:balance}
+  h2{font-size:17px; margin:0 0 8px}
+  p{margin:0 0 10px}
+  .fraco{color:var(--fraco)}
+  .mini{font-size:13px}
+
+  .cartao{background:var(--chao); border:1px solid var(--linha); border-radius:var(--raio); padding:16px; margin-bottom:14px}
+
+  .btn{
+    min-height:48px; padding:0 18px; border-radius:14px; border:1px solid var(--linha);
+    background:var(--chao2); font-weight:650; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn.pri{background:var(--sinal); border-color:var(--sinal); color:var(--sinalTexto)}
+  .btn.largo{width:100%}
+  .btn:disabled{opacity:.5; cursor:default}
+  .link{background:none; border:0; padding:8px 4px; min-height:44px; color:var(--sinal); font-weight:600; text-decoration:underline; text-underline-offset:3px}
+  .link.perigo{color:var(--erro)}
+
+  /* escolha da IA */
+  .opcoes{display:grid; gap:10px; margin:12px 0 14px}
+  .opcao{
+    text-align:left; width:100%; min-height:64px; padding:12px 14px; border-radius:14px;
+    background:var(--chao2); border:1.5px solid var(--linha); display:grid; grid-template-columns:1fr auto; gap:2px 10px; align-items:center;
+  }
+  .opcao[aria-checked="true"]{border-color:var(--sinal); background:#1d1408}
+  .opcao b{font-size:16px}
+  .opcao .peso{font-variant-numeric:tabular-nums; color:var(--fraco); font-size:14px}
+  .opcao .dica{grid-column:1 / -1; font-size:13px; color:var(--fraco)}
+  .opcao .guardada{color:var(--ok); font-weight:600}
+
+  .barra{height:10px; border-radius:99px; background:var(--chao2); overflow:hidden; margin:12px 0 6px; border:1px solid var(--linha)}
+  .barra i{display:block; height:100%; width:0%; background:var(--sinal); border-radius:99px; transition:width .25s linear}
+  .aviso{border-left:3px solid var(--sinal); padding:8px 12px; background:#1d1408; border-radius:0 10px 10px 0; font-size:14px; margin:10px 0}
+  .aviso.ruim{border-color:var(--erro); background:#210f0d}
+
+  /* conversa */
+  .cabecaIA{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px}
+  .cabecaIA .nome{font-size:14px; color:var(--fraco)}
+  .chave{display:flex; align-items:center; gap:10px; min-height:44px; font-size:14px; color:var(--fraco)}
+  .chave input{appearance:none; -webkit-appearance:none; width:46px; height:28px; border-radius:99px; background:var(--chao2); border:1px solid var(--linha); position:relative; margin:0; flex:none}
+  .chave input::after{content:""; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:var(--fraco); transition:transform .15s}
+  .chave input:checked{background:var(--sinal); border-color:var(--sinal)}
+  .chave input:checked::after{transform:translateX(18px); background:#000}
+
+  .mensagens{display:flex; flex-direction:column; gap:12px; padding:6px 0 12px}
+  .msg{max-width:92%; padding:12px 14px; border-radius:16px; white-space:pre-wrap; overflow-wrap:anywhere}
+  .msg.eu{align-self:flex-end; background:var(--sinal); color:var(--sinalTexto); border-bottom-right-radius:6px; font-weight:550}
+  .msg.ia{align-self:flex-start; background:var(--chao); border:1px solid var(--linha); border-bottom-left-radius:6px}
+  .msg.ia.pensando{color:var(--fraco)}
+  .rodape{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; margin-top:10px; padding-top:8px; border-top:1px dashed var(--linha); font-size:13px; color:var(--fraco); white-space:normal}
+  .fonte{background:none; border:1px solid var(--linha); border-radius:99px; padding:0 14px; min-height:44px; font-size:13px; color:var(--texto)}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 10px}
+  .chip{min-height:44px; padding:0 14px; border-radius:99px; background:var(--chao); border:1px solid var(--linha); font-size:14px; text-align:left}
+
+  .barraFala{display:flex; gap:8px; align-items:flex-end; padding:10px 12px; border-top:1px solid var(--linha); background:var(--fundo)}
+  .barraFala textarea{
+    flex:1; min-height:48px; max-height:140px; resize:none; padding:11px 14px; border-radius:14px;
+    background:var(--chao); border:1px solid var(--linha); line-height:1.4;
+  }
+  .barraFala .btn{flex:none; width:56px; padding:0}
+
+  /* biblioteca */
+  .busca{display:flex; gap:8px; margin-bottom:12px}
+  .busca input{flex:1; min-height:48px; padding:0 14px; border-radius:14px; background:var(--chao); border:1px solid var(--linha)}
+  .resultados{display:grid; gap:8px}
+  .resultado{text-align:left; min-height:48px; padding:10px 14px; border-radius:12px; background:var(--chao); border:1px solid var(--linha)}
+  .artigo h1{font-size:24px; margin:8px 0 12px}
+  .artigo h2{font-size:19px; margin:22px 0 8px; padding-top:12px; border-top:1px solid var(--linha)}
+  .artigo h3{font-size:16px; margin:16px 0 6px; color:var(--fraco)}
+  .artigo p, .artigo li{line-height:1.6}
+  .artigo ul{padding-left:20px; margin:0 0 10px}
+
+  /* aparelho */
+  .lista{list-style:none; padding:0; margin:0; display:grid; gap:2px}
+  .lista li{display:grid; grid-template-columns:22px 1fr; gap:10px; padding:9px 0; border-bottom:1px solid var(--linha); align-items:start}
+  .lista li:last-child{border-bottom:0}
+  .lista .marca-ok{color:var(--ok)} .lista .marca-nao{color:var(--erro)} .lista .marca-meh{color:var(--sinal)}
+  .lista span.d{display:block; font-size:13px; color:var(--fraco)}
+  pre.relatorio{white-space:pre-wrap; overflow-wrap:anywhere; font:12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--chao2); border:1px solid var(--linha); border-radius:12px; padding:12px; margin:0 0 12px; max-height:260px; overflow:auto}
+
+  /* abas */
+  .abas{display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--linha); background:var(--fundo); padding-bottom:var(--seguro-baixo)}
+  .abas button{min-height:56px; background:none; border:0; color:var(--fraco); font-size:12.5px; font-weight:600; display:grid; justify-items:center; align-content:center; gap:3px}
+  .abas button svg{width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
+  .abas button[aria-selected="true"]{color:var(--sinal)}
+  .abas button .ponto{position:absolute; width:8px; height:8px; border-radius:50%; background:var(--ok); transform:translate(14px,-4px)}
+
+  /* no alto, para nunca cobrir o campo de pergunta */
+  .nova-bar{position:fixed; left:12px; right:12px; top:calc(env(safe-area-inset-top, 0px) + 58px); display:none; gap:10px; align-items:center; background:var(--chao2); border:1px solid var(--sinal); border-radius:14px; padding:10px 12px; z-index:20}
+  .nova-bar.on{display:flex}
+  .nova-bar .x{background:none; border:0; min-width:44px; min-height:44px; font-size:20px; color:var(--fraco)}
+
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+  @media (min-width:760px){ .aba{padding:24px 16px} }
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <div class="marca"><span class="farol" aria-hidden="true"></span>Kit Offline <small>teste</small></div>
+  <div class="rede" id="rede" role="status">com internet</div>
+</header>
+
+<main id="palco">
+
+  <!-- CONVERSA -->
+  <section class="aba on" id="abaConversa" aria-label="Conversa">
+
+    <div id="preparo">
+      <h1>Uma IA que mora no seu aparelho</h1>
+      <p class="fraco">Baixe uma vez, com internet. Depois ela responde em modo avião.</p>
+
+      <div id="avisoQueda" class="aviso ruim" hidden></div>
+      <div id="avisoSemGPU" class="aviso ruim" hidden></div>
+
+      <div class="cartao">
+        <h2>Escolha o tamanho</h2>
+        <div class="opcoes" id="opcoesIA" role="radiogroup" aria-label="Tamanho da IA"></div>
+        <button class="btn pri largo" id="btnLigarIA">Baixar e ligar</button>
+        <div id="progressoIA" hidden>
+          <div class="barra"><i id="barraIA"></i></div>
+          <div class="mini fraco" id="textoIA" role="status"></div>
+        </div>
+        <div id="erroIA" class="aviso ruim" hidden></div>
+      </div>
+      <p class="mini fraco">É um teste. As respostas podem estar erradas e não substituem socorro médico.</p>
+    </div>
+
+    <div id="conversa" hidden>
+      <div class="cabecaIA">
+        <span class="nome" id="iaNome"></span>
+        <button class="link" id="btnTrocarIA">trocar de IA</button>
+      </div>
+      <label class="chave" id="chaveBib" hidden>
+        <input type="checkbox" id="usarBib" checked>
+        <span>Consultar a biblioteca antes de responder</span>
+      </label>
+      <div class="mensagens" id="mensagens" aria-live="polite"></div>
+      <div class="chips" id="sugestoes"></div>
+    </div>
+  </section>
+
+  <!-- BIBLIOTECA -->
+  <section class="aba" id="abaBiblioteca" aria-label="Biblioteca">
+    <div id="bibBaixar">
+      <h1>Biblioteca sem internet</h1>
+      <p class="fraco">Os pacotes vêm do Kiwix, o projeto que guarda a Wikipédia para ler offline.</p>
+      <div class="cartao">
+        <h2>Medicina</h2>
+        <p class="fraco">Wikipédia de medicina em português, sem imagens. <span id="bibPeso">116 MB</span>.</p>
+        <button class="btn pri largo" id="btnBaixarBib">Baixar a biblioteca</button>
+        <div id="progressoBib" hidden>
+          <div class="barra"><i id="barraBib"></i></div>
+          <div class="mini fraco" id="textoBib" role="status"></div>
+        </div>
+        <div id="erroBib" class="aviso ruim" hidden></div>
+      </div>
+    </div>
+
+    <div id="bibPronta" hidden>
+      <form class="busca" id="formBusca">
+        <input id="campoBusca" type="search" placeholder="Procurar na biblioteca" autocomplete="off" enterkeyhint="search" aria-label="Procurar na biblioteca">
+        <button class="btn" type="submit">Procurar</button>
+      </form>
+      <div class="mini fraco" id="bibResumo"></div>
+      <div class="resultados" id="resultados"></div>
+      <article class="artigo" id="artigo" hidden></article>
+    </div>
+  </section>
+
+  <!-- APARELHO -->
+  <section class="aba" id="abaAparelho" aria-label="Aparelho">
+    <h1>Pronto para o modo avião?</h1>
+    <div class="cartao">
+      <ul class="lista" id="listaPronto"></ul>
+      <p class="mini fraco" id="dicaAviao" style="margin:12px 0 0"></p>
+    </div>
+
+    <div class="cartao">
+      <h2>Este aparelho</h2>
+      <ul class="lista" id="listaAparelho"></ul>
+    </div>
+
+    <div class="cartao">
+      <h2>Relatório do teste</h2>
+      <p class="mini fraco">Copie e mande para quem está montando o app.</p>
+      <pre class="relatorio" id="relatorio"></pre>
+      <button class="btn largo" id="btnCopiar">Copiar relatório</button>
+    </div>
+
+    <button class="link perigo" id="btnApagar">Apagar tudo que este teste guardou no aparelho</button>
+  </section>
+</main>
+
+<form class="barraFala" id="barraFala" hidden>
+  <textarea id="campoFala" rows="1" placeholder="Pergunte alguma coisa" enterkeyhint="send" aria-label="Sua pergunta"></textarea>
+  <button class="btn pri" id="btnEnviar" type="submit" aria-label="Enviar">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
+</form>
+
+<nav class="abas" role="tablist" aria-label="Partes do app">
+  <button role="tab" aria-selected="true" data-aba="abaConversa">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>Conversa
+  </button>
+  <button role="tab" aria-selected="false" data-aba="abaBiblioteca">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h6v16H5zM13 4h6v16h-6zM8 8v0M16 8v0"/></svg>Biblioteca
+  </button>
+  <button role="tab" aria-selected="false" data-aba="abaAparelho">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>Aparelho
+  </button>
+</nav>
+
+<div class="nova-bar" id="novaBar" role="status">
+  <div style="flex:1;min-width:0">
+    <div style="font-size:14px;font-weight:700">Tem uma versão nova</div>
+    <div class="mini fraco">O que você baixou continua guardado.</div>
+  </div>
+  <button class="btn pri" id="btnNova">Atualizar</button>
+  <button class="x" id="btnNovaX" aria-label="Fechar aviso">×</button>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+Bibliotecas de terceiros nesta pasta
+
+web-llm.js
+  @mlc-ai/web-llm 0.2.87 — Apache-2.0
+  https://github.com/mlc-ai/web-llm
+
+libzim-wasm.js, libzim-wasm.wasm
+  openzim/javascript-libzim v0.95 — GPL-3.0
+  https://github.com/openzim/javascript-libzim
+  Leitor dos pacotes .zim do Kiwix. A licença GPL pede que um app
+  distribuído com este leitor tenha o código aberto nas mesmas condições.
