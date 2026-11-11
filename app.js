@@ -6,7 +6,7 @@
 
 import * as webllm from './vendor/web-llm.js';
 
-const VERSAO = '0.2.0';
+const VERSAO = '0.3.0';
 const $ = s => document.querySelector(s);
 
 /* ───────── catálogo ───────── */
@@ -25,7 +25,13 @@ const IAS = [
   { chave: 'forte', nome: 'Forte', modelo: 'Gemma 4 · E2B, a do app do Google',
     f16: 'gemma-4-E2B-it-q4f16_1-MLC', mb16: 2831,
     f32: 'gemma-4-E2B-it-q4f32_1-MLC', mb32: 2831,
-    dica: 'Para computador ou celular topo de linha.' }
+    dica: 'Para computador ou celular topo de linha.' },
+  /* A única IA com visão que este motor roda no navegador. A versão para navegador
+     do Gemma 4, do Google, ainda é só de texto. */
+  { chave: 'visao', nome: 'Com câmera', modelo: 'Phi 3.5 Vision, da Microsoft', visao: true,
+    f16: 'Phi-3.5-vision-instruct-q4f16_1-MLC', mb16: 2772,
+    f32: 'Phi-3.5-vision-instruct-q4f32_1-MLC', mb32: 2772,
+    dica: 'Vê fotos. Em teste: pede computador ou celular topo de linha.' }
 ];
 
 /* O pacote é o arquivo oficial do Kiwix (wikipedia_pt_medicine_nopic_2026-10.zim),
@@ -44,7 +50,12 @@ const SUGESTOES = [
   'Quais são os sinais de desidratação?'
 ];
 
-const INSTRUCAO = 'Você é o assistente do Kit Offline e funciona sem internet. ' +
+const INSTRUCAO_FOTO = 'Você é o assistente do Kit Sobrevivência Offline e funciona sem internet. ' +
+  'Responda em português do Brasil, de forma curta e clara. ' +
+  'Olhe a foto e responda à pergunta com o que dá para ver nela. ' +
+  'Se não der para ter certeza, diga isso.';
+
+const INSTRUCAO = 'Você é o assistente do Kit Sobrevivência Offline e funciona sem internet. ' +
   'Responda em português do Brasil, de forma curta e clara. ' +
   'Quando for um procedimento, use passos numerados. ' +
   'Se não tiver certeza, diga que não sabe. Não invente.';
@@ -59,6 +70,7 @@ const EST = {
   guardadas: {},            // chave -> true se o modelo já está no aparelho
   motor: null, iaChave: null, iaId: null,
   ligando: false, gerando: false,
+  foto: null,               // foto esperando para ir junto com a pergunta
   hist: [],
   zim: null,
   bib: { pronta: false, baixando: false, artigos: 0 },
@@ -308,12 +320,39 @@ function abrirConversa(ia) {
   $('#conversa').hidden = false;
   $('#iaNome').textContent = 'IA ' + ia.nome + ' · ' + nomeModelo(ia);
   $('#chaveBib').hidden = !EST.bib.pronta;
+  $('#btnFoto').hidden = !ia.visao;
+  if (!ia.visao) tirarFoto();
+  $('#campoFala').placeholder = ia.visao ? 'Pergunta ou foto' : 'Pergunte alguma coisa';
   if (!$('#mensagens').children.length) desenharSugestoes();
   mostrarBarraFala();
 }
 
+/* ── foto: diminui antes de mandar, para a IA não gastar memória à toa ── */
+const iaAtual = () => IAS.find(i => i.chave === EST.iaChave) || {};
+async function escolherFoto(arquivo) {
+  if (!arquivo) return;
+  try {
+    const bmp = await createImageBitmap(arquivo);
+    const k = Math.min(1, 768 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    EST.foto = { url: c.toDataURL('image/jpeg', 0.86), w: c.width, h: c.height };
+    $('#fotoMini').src = EST.foto.url; $('#fotoPrevia').hidden = false;
+    $('#campoFala').focus();
+  } catch (e) {
+    EST.medidas.erroFoto = String((e && e.message) || e).slice(0, 200);
+    bolha('ia', 'Não consegui abrir essa foto. Tente outra.');
+  }
+}
+function tirarFoto() {
+  EST.foto = null;
+  $('#fotoPrevia').hidden = true; $('#fotoMini').removeAttribute('src'); $('#campoFoto').value = '';
+}
+
 function desenharSugestoes() {
   const c = $('#sugestoes'); c.replaceChildren();
+  if (iaAtual().visao) c.append(el('button', { class: 'chip', type: 'button', text: 'Mandar uma foto', onclick: () => $('#campoFoto').click() }));
   for (const s of SUGESTOES) c.append(el('button', { class: 'chip', type: 'button', text: s, onclick: () => perguntar(s) }));
 }
 
@@ -322,9 +361,9 @@ function mostrarBarraFala() {
   $('#barraFala').hidden = !naConversa;
 }
 
-function bolha(quem, texto) {
+function bolha(quem, texto, foto) {
   const corpo = el('div', { text: texto });
-  const b = el('div', { class: 'msg ' + quem }, corpo);
+  const b = el('div', { class: 'msg ' + quem }, foto ? el('img', { src: foto.url, alt: 'Foto enviada' }) : null, corpo);
   $('#mensagens').append(b);
   rolarFim(true);
   return { b, corpo };
@@ -372,10 +411,13 @@ function botaoEnviar(gerando) {
 
 async function perguntar(texto) {
   texto = String(texto || '').trim();
+  const foto = EST.foto && iaAtual().visao ? EST.foto : null;
+  if (!texto && foto) texto = 'O que aparece nesta foto?';
   if (!texto || EST.gerando || !EST.motor) return;
   $('#sugestoes').replaceChildren();
   $('#campoFala').value = ''; ajustarCampo();
-  bolha('eu', texto);
+  bolha('eu', texto, foto);
+  tirarFoto();
   const { b, corpo } = bolha('ia', 'Pensando…');
   b.classList.add('pensando');
   EST.gerando = true; botaoEnviar(true);
@@ -383,7 +425,8 @@ async function perguntar(texto) {
   let fontes = [], contexto = '', resposta = '';
   const t0 = performance.now(); let t1 = null, uso = null, consultaMs = null;
   try {
-    if (EST.bib.pronta && $('#usarBib').checked) {
+    if (foto) corpo.textContent = 'Olhando a foto…';
+    if (!foto && EST.bib.pronta && $('#usarBib').checked) {
       corpo.textContent = 'Consultando a biblioteca…';
       const c0 = performance.now();
       try { const r = await consultarBiblioteca(texto); fontes = r.fontes; contexto = r.contexto; }
@@ -399,7 +442,11 @@ async function perguntar(texto) {
         'Responda à pergunta com as informações deles, começando pelo que a pessoa deve fazer primeiro.\n\n' +
         contexto + '\n\nPergunta: ' + texto + '\nResposta, com base nos trechos:'
       : INSTRUCAO + '\n\nPergunta: ' + texto;
-    const msgs = [...EST.hist.slice(-4), { role: 'user', content: atual }];
+    /* com foto vai uma pergunta só, sem histórico: a imagem já ocupa boa parte da memória da IA */
+    const msgs = foto
+      ? [{ role: 'user', content: [{ type: 'text', text: INSTRUCAO_FOTO + '\n\nPergunta: ' + texto },
+                                    { type: 'image_url', image_url: { url: foto.url } }] }]
+      : [...EST.hist.slice(-4), { role: 'user', content: atual }];
 
     const pedido = { messages: msgs, stream: true, stream_options: { include_usage: true },
       temperature: 0.3, max_tokens: 600, frequency_penalty: 0.6, presence_penalty: 0.3 };
@@ -422,7 +469,7 @@ async function perguntar(texto) {
     if (travou) { resposta = semRepeticao(resposta); EST.medidas.travou = (EST.medidas.travou || 0) + 1; }
     const limpa = limparResposta(resposta);
     corpo.textContent = limpa || '(a IA não respondeu nada)';
-    EST.hist.push({ role: 'user', content: texto }, { role: 'assistant', content: limpa });
+    EST.hist.push({ role: 'user', content: (foto ? '(mandei uma foto) ' : '') + texto }, { role: 'assistant', content: limpa });
 
     const seg = t1 ? (performance.now() - t1) / 1000 : 0;
     const palavras = limpa.split(/\s+/).filter(Boolean).length;
@@ -432,7 +479,7 @@ async function perguntar(texto) {
       esperaSeg: t1 ? +((t1 - t0) / 1000).toFixed(1) : null,
       palavrasSeg: pps ? +pps.toFixed(1) : null,
       tokensSeg: tps ? +tps.toFixed(1) : null,
-      palavras, comBiblioteca: !!contexto, consultaMs,
+      palavras, comBiblioteca: !!contexto, comFoto: !!foto, consultaMs,
       fontes: fontes.map(f => f.titulo).join(' | ')
     };
 
@@ -754,7 +801,7 @@ function desenharAparelho() {
 function montarRelatorio() {
   const a = EST.aparelho, m = EST.medidas, u = m.ultima || {};
   const L = [
-    'Kit Offline · teste ' + VERSAO + ' · ' + new Date().toLocaleString('pt-BR'),
+    'Kit Sobrevivência Offline · teste ' + VERSAO + ' · ' + new Date().toLocaleString('pt-BR'),
     'navegador: ' + navigator.userAgent,
     'tela: ' + screen.width + '×' + screen.height + ' @' + (window.devicePixelRatio || 1) + ' · instalado: ' + (a.instalado ? 'sim' : 'não'),
     'rede agora: ' + (EST.semRede ? 'cortada (simulação)' : navigator.onLine ? 'com internet' : 'SEM internet'),
@@ -768,10 +815,11 @@ function montarRelatorio() {
       ? u.palavras + ' palavras · ' + (u.palavrasSeg || '?') + ' palavras/s · ' + (u.tokensSeg || '?') + ' tokens/s · esperou ' + (u.esperaSeg || '?') + ' s'
       : 'nenhuma'),
     'biblioteca: ' + (EST.bib.pronta ? PACOTE.titulo + ' · ' + EST.bib.artigos + ' artigos' : 'não baixada') +
-      (u.comBiblioteca ? ' · consulta ' + u.consultaMs + ' ms · fontes: ' + u.fontes : '')
+      (u.comBiblioteca ? ' · consulta ' + u.consultaMs + ' ms · fontes: ' + u.fontes : '') +
+      (u.comFoto ? ' · a última pergunta foi com foto' : '')
   ];
   if (m.travou) L.push('a IA travou repetindo: ' + m.travou + ' vez(es)');
-  for (const k of ['queda', 'erroIA', 'erroConversa', 'erroBib']) if (m[k]) L.push(k + ': ' + m[k]);
+  for (const k of ['queda', 'erroIA', 'erroConversa', 'erroBib', 'erroFoto']) if (m[k]) L.push(k + ': ' + m[k]);
   return L.join('\n');
 }
 
@@ -826,7 +874,7 @@ window.addEventListener('online', () => _dispararVolta(true));
 
 /* "a pessoa está no meio de alguma coisa?" — recarregar agora desligaria a IA */
 function isBusyEditing() {
-  return EST.gerando || EST.ligando || EST.bib.baixando || !!EST.motor || !!$('#campoFala').value.trim();
+  return EST.gerando || EST.ligando || EST.bib.baixando || !!EST.motor || !!EST.foto || !!$('#campoFala').value.trim();
 }
 
 let NOVA_ESPERANDO = null, _recarregando = false;
@@ -908,9 +956,13 @@ async function partida() {
     perguntar($('#campoFala').value);
   });
   $('#campoFala').addEventListener('input', ajustarCampo);
+  window.addEventListener('resize', ajustarCampo);
   $('#campoFala').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#barraFala').requestSubmit(); }
   });
+  $('#btnFoto').addEventListener('click', () => $('#campoFoto').click());
+  $('#campoFoto').addEventListener('change', e => escolherFoto(e.target.files && e.target.files[0]));
+  $('#btnTirarFoto').addEventListener('click', tirarFoto);
   $('#btnBaixarBib').addEventListener('click', baixarBiblioteca);
   $('#formBusca').addEventListener('submit', e => { e.preventDefault(); const q = $('#campoBusca').value.trim(); if (q) buscarNaTela(q); });
   $('#btnCopiar').addEventListener('click', async () => {
@@ -961,6 +1013,6 @@ async function partida() {
 }
 
 /* porta de serviço para conferência */
-window.KIT = { EST, IAS, perguntar, consultarBiblioteca, procurar, lerArtigo, montarRelatorio, avisarSW, palavrasChave, plataforma, cartaoInstalar };
+window.KIT = { EST, IAS, perguntar, escolherFoto, consultarBiblioteca, procurar, lerArtigo, montarRelatorio, avisarSW, palavrasChave, plataforma, cartaoInstalar };
 
 partida();

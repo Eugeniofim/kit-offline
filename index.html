@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Kit Offline</title>
-<meta name="description" content="IA e biblioteca que funcionam sem internet.">
+<title>Kit Sobrevivência Offline</title>
+<meta name="description" content="Chat com IA que funciona sem internet, com a Wikipédia de medicina guardada no aparelho.">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark">
@@ -51,6 +51,7 @@
   }
   .marca{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.01em}
   .marca small{font-weight:600; font-size:12px; color:var(--sinal); border:1px solid var(--sinal); border-radius:99px; padding:1px 8px}
+  @media (max-width:520px){ .marca{font-size:15px} .marca small{display:none} }
   .farol{width:10px; height:10px; border-radius:50%; background:var(--sinal); box-shadow:0 0 0 4px rgba(255,138,31,.18)}
   .rede{font-size:13px; color:var(--fraco); display:flex; align-items:center; gap:6px; white-space:nowrap}
   .rede::before{content:""; width:8px; height:8px; border-radius:50%; background:var(--ok)}
@@ -130,6 +131,14 @@
     background:var(--chao); border:1px solid var(--linha); line-height:1.4;
   }
   .barraFala .btn{flex:none; width:56px; padding:0}
+  .barraFala{flex-wrap:wrap}
+  .barraFala #btnFoto{width:48px}
+  .barraFala #btnFoto svg{width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round}
+  .fotoPrevia{flex:1 0 100%; display:flex; align-items:center; gap:10px}
+  .fotoPrevia img{width:56px; height:56px; object-fit:cover; border-radius:10px; border:1px solid var(--linha)}
+  .fotoPrevia span{flex:1; font-size:13px; color:var(--fraco)}
+  .fotoPrevia button{min-width:44px; min-height:44px; background:none; border:0; color:var(--fraco); font-size:22px}
+  .msg.eu img{display:block; width:220px; max-width:100%; border-radius:10px; margin-bottom:8px}
 
   /* biblioteca */
   .busca{display:flex; gap:8px; margin-bottom:12px}
@@ -169,7 +178,7 @@
 <body>
 
 <header class="topo">
-  <div class="marca"><span class="farol" aria-hidden="true"></span>Kit Offline <small>teste</small></div>
+  <div class="marca"><span class="farol" aria-hidden="true"></span>Kit Sobrevivência Offline <small>teste</small></div>
   <div class="rede" id="rede" role="status">com internet</div>
 </header>
 
@@ -267,6 +276,15 @@
 </main>
 
 <form class="barraFala" id="barraFala" hidden>
+  <div class="fotoPrevia" id="fotoPrevia" hidden>
+    <img id="fotoMini" alt="Foto escolhida">
+    <span>Foto pronta. Escreva a pergunta ou só envie.</span>
+    <button type="button" id="btnTirarFoto" aria-label="Tirar a foto">×</button>
+  </div>
+  <button class="btn" type="button" id="btnFoto" aria-label="Mandar uma foto" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.6-2.5h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>
+  </button>
+  <input type="file" id="campoFoto" accept="image/*" hidden>
   <textarea id="campoFala" rows="1" placeholder="Pergunte alguma coisa" enterkeyhint="send" aria-label="Sua pergunta"></textarea>
   <button class="btn pri" id="btnEnviar" type="submit" aria-label="Enviar">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>

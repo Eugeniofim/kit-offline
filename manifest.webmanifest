@@ -1,7 +1,7 @@
 {
-  "name": "Kit Offline",
+  "name": "Kit Sobrevivência Offline",
   "short_name": "Kit Offline",
-  "description": "IA e biblioteca médica que funcionam sem internet, direto no aparelho.",
+  "description": "Chat com IA que funciona sem internet, com a Wikipédia de medicina guardada no aparelho.",
   "categories": ["utilities", "education"],
   "lang": "pt-BR",
   "start_url": "./",

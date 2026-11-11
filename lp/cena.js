@@ -19,6 +19,11 @@ const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PERGUNTA = 'Quais são os sinais de desidratação?';
 const RESPOSTA = 'Os sinais de desidratação incluem:\n1. Sede\n2. Alterações neurológicas, como dor de cabeça, mal-estar, perda de apetite, náuseas e diminuição do volume urinário…\n3. Confusão mental\n4. Fadiga inexplicável\n5. Unhas roxas';
 
+/* A câmera: foto e resposta REAIS do teste com a IA "Com câmera", sem internet.
+   A resposta está cortada com reticências; nada foi acrescentado. */
+const PERGUNTA_FOTO = 'O que significa esta placa?';
+const RESPOSTA_FOTO = 'Esta placa é um sinal de perigo elétrico. Ele alerta as pessoas para a presença de alta tensão elétrica em uma área…';
+
 /* ───────── o que a rolagem diz ───────── */
 
 const SEC = ['topo', 'dentro', 'passos', 'video', 'final']
@@ -32,7 +37,7 @@ const passosLi = [...document.querySelectorAll('#listaPassos li')];
 
 /* estado da história, lido da rolagem a cada quadro */
 const E = { secao: 'topo', estado: 'farol', fim: false, rede: 1, farol: 0, semSinal: false, aviao: false,
-            beat: 0, perguntou: false, chars: 0, fonte: false, passo: 0 };
+            beat: 0, perguntou: false, chars: 0, fonte: false, charsFoto: 0, passo: 0 };
 
 function medir() {
   const vh = window.innerHeight;
@@ -49,17 +54,19 @@ function ler() {
   let maior = SEC[0];
   for (const s of SEC) if (s.peso > maior.peso) maior = s;
   E.secao = maior.id;
-  E.estado = maior.id === 'dentro' ? 'conversa' : (maior.id === 'passos' || maior.id === 'video') ? 'pronto' : 'farol';
+  E.estado = maior.id === 'dentro' ? (d < 0.5 ? 'conversa' : 'camera')
+    : (maior.id === 'passos' || maior.id === 'video') ? 'pronto' : 'farol';
   E.fim = maior.id === 'final';
   E.rede = 1 - suave(0.06, 0.82, t);
   E.farol = suave(0.45, 0.95, t);
   E.semSinal = E.rede < 0.45;
-  E.beat = d < 0.34 ? 0 : d < 0.67 ? 1 : 2;
+  E.beat = Math.min(3, Math.floor(d * 4));
   E.perguntou = sec.dentro.peso > 0.3 || d > 0;
-  E.chars = Math.round(RESPOSTA.length * suave(0.03, 0.56, d));
-  E.fonte = d > 0.58;
+  E.chars = Math.round(RESPOSTA.length * suave(0.02, 0.34, d));
+  E.fonte = d > 0.36;
+  E.charsFoto = Math.round(RESPOSTA_FOTO.length * suave(0.56, 0.72, d));
   E.passo = maior.id === 'video' || maior.id === 'final' ? 3 : p < 0.12 ? 0 : p < 0.42 ? 1 : p < 0.72 ? 2 : 3;
-  E.aviao = (E.estado === 'conversa' && d > 0.72) || (E.estado === 'pronto' && E.passo >= 3);
+  E.aviao = (maior.id === 'dentro' && d > 0.78) || (E.estado === 'pronto' && E.passo >= 3);
 }
 
 function pintarPagina() {
@@ -301,6 +308,7 @@ function montarCena() {
   g.setTransform(U, 0, 0, U, 0, 0);
   g.font = F(600, 14.5); const linhasPergunta = quebrar(PERGUNTA, 214);
   g.font = F(500, 14);   const linhasResposta = quebrar(RESPOSTA, 270);
+  const linhasFoto = quebrar(RESPOSTA_FOTO, 270);
 
   function barraStatus() {
     g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = COR.texto; g.font = F(650, 13.5);
@@ -314,10 +322,12 @@ function montarCena() {
   function cabecalho() {
     g.fillStyle = 'rgba(255,138,31,.2)'; g.beginPath(); g.arc(27, 69, 9, 0, 7); g.fill();
     g.fillStyle = COR.sinal; g.beginPath(); g.arc(27, 69, 5, 0, 7); g.fill();
-    g.textAlign = 'left'; g.fillStyle = COR.texto; g.font = F(700, 17.5); g.fillText('Kit Offline', 43, 69.5);
     const fora = E.semSinal || E.aviao, txt = fora ? 'sem internet' : 'com internet';
-    g.font = F(550, 12.5); g.textAlign = 'right'; g.fillStyle = fora ? COR.sinal : COR.fraco; g.fillText(txt, 338, 69.5);
+    g.font = F(550, 12); g.textAlign = 'right'; g.fillStyle = fora ? COR.sinal : COR.fraco; g.fillText(txt, 338, 69.5);
     const lw = g.measureText(txt).width;
+    let tam = 16; g.font = F(700, tam);
+    while (tam > 11 && g.measureText('Kit Sobrevivência Offline').width > 338 - lw - 24 - 43) { tam -= 0.5; g.font = F(700, tam); }
+    g.textAlign = 'left'; g.fillStyle = COR.texto; g.fillText('Kit Sobrevivência Offline', 43, 69.5);
     g.fillStyle = fora ? COR.sinal : COR.ok; g.beginPath(); g.arc(338 - lw - 9, 69.5, 4, 0, 7); g.fill();
     g.strokeStyle = COR.linha; g.lineWidth = 1; g.beginPath(); g.moveTo(0, 93.5); g.lineTo(TW, 93.5); g.stroke();
   }
@@ -343,11 +353,12 @@ function montarCena() {
     g.lineWidth = 1.5;
     [54, 90, 130].forEach((r, i) => { g.strokeStyle = 'rgba(255,138,31,' + ((0.55 - i * 0.15) * f + 0.06 * (1 - f)) + ')'; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); });
     g.fillStyle = mistura('#39404a', COR.sinal, f); g.beginPath(); g.arc(cx, cy, 27, 0, 7); g.fill();
-    g.textAlign = 'center'; g.fillStyle = COR.texto; g.font = F(800, 31); g.fillText('Kit Offline', cx, 498);
+    g.textAlign = 'center'; g.fillStyle = COR.texto; g.font = F(800, 27); g.fillText('Kit Sobrevivência', cx, 488);
+    g.fillStyle = mistura('#8a929c', COR.sinal, f); g.fillText('Offline', cx, 521);
     g.font = F(550, 15);
-    if (E.fim) { g.fillStyle = COR.sinal; g.fillText('Pronto antes de precisar.', cx, 534); }
-    else if (E.semSinal) { g.fillStyle = COR.sinal; g.fillText('Sem internet. Funcionando.', cx, 534); }
-    else { g.fillStyle = COR.fraco; g.fillText('IA e biblioteca médica no aparelho', cx, 534); }
+    if (E.fim) { g.fillStyle = COR.sinal; g.fillText('Pronto antes de precisar.', cx, 558); }
+    else if (E.semSinal) { g.fillStyle = COR.sinal; g.fillText('Sem internet. Funcionando.', cx, 558); }
+    else { g.fillStyle = COR.fraco; g.fillText('Chat com IA, tudo offline', cx, 558); }
   }
   function telaConversa() {
     g.textAlign = 'left'; g.fillStyle = COR.fraco; g.font = F(550, 12.5); g.fillText('IA Média · roda neste aparelho', 18, 114);
@@ -376,11 +387,40 @@ function montarCena() {
         g.fillStyle = COR.texto; g.fillText('Desidratação', xa + 14 + wf + 19, yf + 27.5);
       }
     }
-    caixa(18, 662, 270, 44, 14); g.fillStyle = COR.chao; g.fill(); g.strokeStyle = COR.linha; g.lineWidth = 1; g.stroke();
-    g.textAlign = 'left'; g.fillStyle = '#6e7783'; g.font = F(500, 14); g.fillText('Pergunte alguma coisa', 34, 684.5);
+    barraPergunta(false);
+  }
+  function barraPergunta(comCamera) {
+    const x = comCamera ? 70 : 18;
+    if (comCamera) {
+      caixa(18, 662, 44, 44, 14); g.fillStyle = '#151a20'; g.fill(); g.strokeStyle = COR.linha; g.lineWidth = 1; g.stroke();
+      g.strokeStyle = COR.texto; g.lineWidth = 1.7; g.lineJoin = 'round'; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(30, 678); g.lineTo(34, 678); g.lineTo(36.5, 674.5); g.lineTo(43.5, 674.5); g.lineTo(46, 678); g.lineTo(50, 678); g.lineTo(50, 693); g.lineTo(30, 693); g.closePath(); g.stroke();
+      g.beginPath(); g.arc(40, 685, 4.2, 0, 7); g.stroke();
+    }
+    caixa(x, 662, 288 - x, 44, 14); g.fillStyle = COR.chao; g.fill(); g.strokeStyle = COR.linha; g.lineWidth = 1; g.stroke();
+    g.textAlign = 'left'; g.fillStyle = '#6e7783'; g.font = F(500, 14); g.fillText(comCamera ? 'Pergunta ou foto' : 'Pergunte alguma coisa', x + 16, 684.5);
     caixa(296, 662, 46, 44, 14); g.fillStyle = COR.sinal; g.fill();
     g.strokeStyle = COR.sinalTexto; g.lineWidth = 2.2; g.lineCap = 'round'; g.lineJoin = 'round';
     g.beginPath(); g.moveTo(310, 684); g.lineTo(328, 684); g.moveTo(322, 678); g.lineTo(328, 684); g.lineTo(322, 690); g.stroke();
+  }
+  /* a câmera: a foto mandada e a resposta da IA que enxerga */
+  function telaCamera() {
+    g.textAlign = 'left'; g.fillStyle = COR.fraco; g.font = F(550, 12.5); g.fillText('IA Com câmera · roda neste aparelho', 18, 114);
+    const wf = 190, hf = 142, xp = 342 - wf - 20, yp = 128, hp = hf + 50;
+    caixa(xp, yp, wf + 20, hp, 16); g.fillStyle = COR.sinal; g.fill();
+    g.save(); caixa(xp + 10, yp + 10, wf, hf, 10); g.clip();
+    if (fotoPronta) g.drawImage(fotoPlaca, xp + 10, yp + 10, wf, hf); else { g.fillStyle = '#9a9c9a'; g.fillRect(xp + 10, yp + 10, wf, hf); }
+    g.restore();
+    g.fillStyle = COR.sinalTexto; g.font = F(600, 13.5); g.fillText(PERGUNTA_FOTO, xp + 12, yp + hf + 29);
+    const xa = 18, ya = yp + hp + 12, wa = 300, la = 19.5;
+    g.font = F(500, 14);
+    let resta = E.charsFoto; const vis = [];
+    for (const l of linhasFoto) { if (resta <= 0) break; vis.push(l.slice(0, resta)); resta -= l.length + 1; }
+    const olhando = !vis.length, ha = (olhando ? 1 : vis.length) * la + 24;
+    caixa(xa, ya, wa, ha, 16); g.fillStyle = COR.chao; g.fill(); g.strokeStyle = COR.linha; g.lineWidth = 1; g.stroke();
+    if (olhando) { g.fillStyle = COR.fraco; g.fillText('Olhando a foto…', xa + 14, ya + 12 + la / 2); }
+    else { g.fillStyle = COR.texto; vis.forEach((l, i) => g.fillText(l, xa + 14, ya + 12 + la / 2 + i * la)); }
+    barraPergunta(true);
   }
   function telaPronto() {
     g.textAlign = 'left'; g.fillStyle = COR.texto; g.font = F(800, 22);
@@ -405,15 +445,19 @@ function montarCena() {
   }
 
   let chaveTela = '', estadoTela = '', troca = 0;
+  const fotoPlaca = new Image(); let fotoPronta = false;
+  fotoPlaca.onload = () => { fotoPronta = true; chaveTela = ''; };
+  fotoPlaca.src = 'foto-placa.jpg';
   function pintarTela(dt) {
     if (E.estado !== estadoTela) { estadoTela = E.estado; troca = calmo ? 0 : 1; }
-    const ch = [E.estado, E.fim, E.semSinal, E.aviao, Math.round((E.fim ? 1 : E.farol) * 14), E.chars, E.fonte, E.passo, E.perguntou].join('|');
+    const ch = [E.estado, E.fim, E.semSinal, E.aviao, Math.round((E.fim ? 1 : E.farol) * 14), E.chars, E.fonte, E.charsFoto, E.passo, E.perguntou].join('|');
     if (ch === chaveTela && troca <= 0) return;
     chaveTela = ch;
     g.setTransform(U, 0, 0, U, 0, 0);
     g.fillStyle = '#000'; g.fillRect(0, 0, TW, TH);
     barraStatus(); cabecalho();
     if (E.estado === 'conversa') { telaConversa(); abas(0); }
+    else if (E.estado === 'camera') { telaCamera(); abas(0); }
     else if (E.estado === 'pronto') { telaPronto(); abas(2); }
     else { telaFarol(); abas(0); }
     if (troca > 0) { g.fillStyle = 'rgba(0,0,0,' + troca + ')'; g.fillRect(0, 94, TW, 624); troca = Math.max(0, troca - dt * 5); }
