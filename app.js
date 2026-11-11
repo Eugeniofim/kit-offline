@@ -6,7 +6,7 @@
 
 import * as webllm from './vendor/web-llm.js';
 
-const VERSAO = '0.3.0';
+const VERSAO = '0.4.0';
 const $ = s => document.querySelector(s);
 
 /* ───────── catálogo ───────── */
@@ -34,14 +34,22 @@ const IAS = [
     dica: 'Vê fotos. Em teste: pede computador ou celular topo de linha.' }
 ];
 
-/* O pacote é o arquivo oficial do Kiwix (wikipedia_pt_medicine_nopic_2026-10.zim),
-   servido daqui em partes: pacotes/medicina/pacote.json diz quais são. */
-const PACOTE = {
-  nome: 'medicina.zim',
-  titulo: 'Medicina',
-  base: 'pacotes/medicina/',
-  bytes: 122104382
-};
+/* Os pacotes são arquivos oficiais do Kiwix, servidos em partes porque os
+   servidores do Kiwix não deixam uma página baixar direto (sem CORS).
+   - medicina: wikipedia_pt_medicine_nopic_2026-10.zim, junto com o app.
+   - top: wikipedia_pt_top_nopic_2026-10.zim (as páginas mais lidas), num
+     repositório público separado, lido pelo endereço "raw" do GitHub. */
+const PACOTES = [
+  { chave: 'medicina', nome: 'medicina.zim', guarda: 'kit_bib',
+    titulo: 'Medicina e primeiros socorros', curto: 'Medicina',
+    descricao: 'Wikipédia de medicina em português, sem imagens.',
+    base: 'pacotes/medicina/', bytes: 122104382 },
+  { chave: 'top', nome: 'wikipedia-top.zim', guarda: 'kit_bib_top',
+    titulo: 'Wikipédia: as páginas mais lidas', curto: 'Wikipédia',
+    descricao: 'As páginas mais lidas da Wikipédia em português, texto completo, sem imagens.',
+    base: 'https://raw.githubusercontent.com/Eugeniofim/kit-offline-biblioteca/main/wikipedia-top/', bytes: 1095015424 }
+];
+const pacote = ch => PACOTES.find(p => p.chave === ch);
 
 const SUGESTOES = [
   'Como tratar uma queimadura?',
@@ -72,8 +80,10 @@ const EST = {
   ligando: false, gerando: false,
   foto: null,               // foto esperando para ir junto com a pergunta
   hist: [],
-  zim: null,
-  bib: { pronta: false, baixando: false, artigos: 0 },
+  bibs: Object.fromEntries(PACOTES.map(p => [p.chave, { pronta: false, baixando: false, artigos: 0, zim: null, dom: null }])),
+  /* resumo: tem algum pacote pronto? algum baixando? */
+  bib: { get pronta() { return PACOTES.some(p => EST.bibs[p.chave].pronta); },
+         get baixando() { return PACOTES.some(p => EST.bibs[p.chave].baixando); } },
   paginaGuardada: false,
   semRede: new URLSearchParams(location.search).get('semrede') === '1',
   medidas: {}
@@ -486,7 +496,7 @@ async function perguntar(texto) {
     const rodape = el('div', { class: 'rodape' });
     if (fontes.length) {
       rodape.append(el('span', { text: 'Fonte:' }));
-      for (const f of fontes) rodape.append(el('button', { class: 'fonte', type: 'button', text: f.titulo, onclick: () => { trocarAba('abaBiblioteca'); abrirArtigo(f.caminho); } }));
+      for (const f of fontes) rodape.append(el('button', { class: 'fonte', type: 'button', text: f.titulo, onclick: () => { trocarAba('abaBiblioteca'); abrirArtigo(f.caminho, f.pac); } }));
     }
     if (travou) rodape.append(el('span', { text: 'Parei a IA: ela começou a se repetir.' }));
     if (pps) rodape.append(el('span', { text: pps.toFixed(pps < 10 ? 1 : 0).replace('.', ',') + ' palavras por segundo' }));
@@ -511,121 +521,171 @@ function ajustarCampo() {
 
 /* ───────── biblioteca (Kiwix) ───────── */
 
-function zim(acao, dados) {
+function zim(pac, acao, dados) {
   return new Promise((ok, falha) => {
-    if (!EST.zim) return falha(new Error('biblioteca fechada'));
+    const w = EST.bibs[pac] && EST.bibs[pac].zim;
+    if (!w) return falha(new Error('biblioteca fechada'));
     const canal = new MessageChannel();
     const relogio = setTimeout(() => falha(new Error('a biblioteca demorou demais')), 45000);
     canal.port1.onmessage = ev => { clearTimeout(relogio); ok(ev.data); };
-    EST.zim.postMessage(Object.assign({ action: acao }, dados || {}), [canal.port2]);
+    w.postMessage(Object.assign({ action: acao }, dados || {}), [canal.port2]);
   });
 }
+const prontos = () => PACOTES.filter(p => EST.bibs[p.chave].pronta);
 
-async function abrirZim(arquivo) {
-  if (EST.zim) { try { EST.zim.terminate(); } catch (_) {} }
-  EST.zim = new Worker('./vendor/libzim-wasm.js');
-  EST.zim.onerror = e => console.warn('leitor do Kiwix:', e.message || e);
-  await zim('init', { files: [arquivo] });
-  EST.bib.artigos = Number(await zim('getArticleCount')) || 0;
-  EST.bib.pronta = true;
+async function abrirZim(pac, arquivo) {
+  const b = EST.bibs[pac];
+  if (b.zim) { try { b.zim.terminate(); } catch (_) {} }
+  b.zim = new Worker('./vendor/libzim-wasm.js');
+  b.zim.onerror = e => console.warn('leitor do Kiwix:', e.message || e);
+  await zim(pac, 'init', { files: [arquivo] });
+  b.artigos = Number(await zim(pac, 'getArticleCount')) || 0;
+  b.pronta = true;
   desenharBiblioteca();
 }
 
 async function abrirBibliotecaGuardada() {
-  let reg = null;
-  try { reg = JSON.parse(localStorage.getItem('kit_bib') || 'null'); } catch (_) {}
-  if (!reg || !EST.aparelho.opfs) return;
-  try {
-    const raiz = await navigator.storage.getDirectory();
-    const arq = await (await raiz.getFileHandle(PACOTE.nome)).getFile();
-    if (arq.size !== reg.bytes) throw new Error('arquivo incompleto');
-    await abrirZim(arq);
-  } catch (e) {
-    console.warn('biblioteca guardada não abriu:', e);
-    EST.medidas.erroBib = String((e && e.message) || e).slice(0, 200);
+  if (!EST.aparelho.opfs) return;
+  for (const p of PACOTES) {
+    let reg = null;
+    try { reg = JSON.parse(localStorage.getItem(p.guarda) || 'null'); } catch (_) {}
+    if (!reg) continue;
+    try {
+      const raiz = await navigator.storage.getDirectory();
+      const arq = await (await raiz.getFileHandle(p.nome)).getFile();
+      if (arq.size !== reg.bytes) throw new Error('arquivo incompleto');
+      await abrirZim(p.chave, arq);
+    } catch (e) {
+      console.warn('pacote guardado não abriu:', p.chave, e);
+      EST.medidas.erroBib = p.curto + ': ' + String((e && e.message) || e).slice(0, 180);
+    }
   }
 }
 
-async function baixarBiblioteca() {
-  if (EST.bib.baixando) return;
-  if (!EST.aparelho.opfs) { erroBib('Este navegador não deixa guardar arquivo grande no aparelho.'); return; }
-  EST.bib.baixando = true;
-  $('#erroBib').hidden = true; $('#progressoBib').hidden = false; $('#btnBaixarBib').disabled = true;
-  $('#barraBib').style.width = '0%'; $('#textoBib').textContent = 'Começando…';
+async function baixarBiblioteca(ch) {
+  const p = pacote(ch) || PACOTES[0], b = EST.bibs[p.chave], d = b.dom;
+  if (b.baixando || b.pronta) return;
+  if (!EST.aparelho.opfs) { erroBib(p.chave, 'Este navegador não deixa guardar arquivo grande no aparelho.'); return; }
+  b.baixando = true;
+  d.erro.hidden = true; d.barra.style.width = '0%'; d.texto.textContent = 'Começando…';
+  desenharPacotes();
   try { if (navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
 
   let indice = null;
   try {
-    const r = await fetch(PACOTE.base + 'pacote.json', { cache: 'no-store' });
+    const r = await fetch(p.base + 'pacote.json', { cache: 'no-store' });
     if (!r.ok) throw new Error('índice ' + r.status);
     indice = await r.json();
   } catch (e) {
-    EST.bib.baixando = false; $('#progressoBib').hidden = true; $('#btnBaixarBib').disabled = false;
-    erroBib(!navigator.onLine || EST.semRede ? 'Sem internet não dá para baixar a biblioteca.' : 'Não achei o pacote da biblioteca. (' + String((e && e.message) || e) + ')');
+    b.baixando = false; desenharPacotes();
+    erroBib(p.chave, !navigator.onLine || EST.semRede ? 'Sem internet não dá para baixar a biblioteca.' : 'Não achei o pacote da biblioteca. (' + String((e && e.message) || e) + ')');
     return;
   }
 
   const w = new Worker('./baixa-zim.js');
-  const fim = () => { EST.bib.baixando = false; $('#progressoBib').hidden = true; $('#btnBaixarBib').disabled = false; w.terminate(); };
-  w.onerror = e => { fim(); erroBib('O download falhou. ' + (e.message || '')); };
+  const fim = () => { b.baixando = false; w.terminate(); desenharPacotes(); };
+  w.onerror = e => { fim(); erroBib(p.chave, 'O download falhou. ' + (e.message || '')); };
   w.onmessage = async ev => {
-    const d = ev.data || {};
-    if (d.tipo === 'progresso' || d.tipo === 'parte') {
+    const m = ev.data || {};
+    if (m.tipo === 'progresso' || m.tipo === 'parte') {
       /* cada parte inteira fica anotada: se cair, a próxima tentativa continua dali */
-      if (d.tipo === 'parte') guardar('kit_bib_parcial', String(d.feitas));
-      const pct = d.total ? Math.round(d.feito / d.total * 100) : 0;
-      $('#barraBib').style.width = pct + '%';
-      $('#textoBib').textContent = 'Baixando · ' + mb(d.feito) + ' de ' + mb(d.total) + ' · ' + pct + '%';
-    } else if (d.tipo === 'fim') {
-      $('#textoBib').textContent = 'Abrindo a biblioteca…';
+      if (m.tipo === 'parte') guardar(p.guarda + '_parcial', String(m.feitas));
+      const pct = m.total ? Math.round(m.feito / m.total * 100) : 0;
+      d.barra.style.width = pct + '%';
+      d.texto.textContent = 'Baixando · ' + mb(m.feito) + ' de ' + mb(m.total) + ' · ' + pct + '%';
+    } else if (m.tipo === 'fim') {
+      d.texto.textContent = 'Abrindo a biblioteca…';
       try {
-        esquecer('kit_bib_parcial');
-        guardar('kit_bib', JSON.stringify({ nome: PACOTE.nome, bytes: d.feito, quando: Date.now() }));
+        esquecer(p.guarda + '_parcial');
+        guardar(p.guarda, JSON.stringify({ nome: p.nome, bytes: m.feito, quando: Date.now() }));
         const raiz = await navigator.storage.getDirectory();
-        await abrirZim(await (await raiz.getFileHandle(PACOTE.nome)).getFile());
+        await abrirZim(p.chave, await (await raiz.getFileHandle(p.nome)).getFile());
         fim();
-      } catch (e) { fim(); erroBib('Baixou, mas não abriu: ' + String((e && e.message) || e).slice(0, 160)); }
+      } catch (e) { fim(); erroBib(p.chave, 'Baixou, mas não abriu: ' + String((e && e.message) || e).slice(0, 160)); }
       await medirEspaco(); desenharAparelho();
-    } else if (d.tipo === 'erro') {
+    } else if (m.tipo === 'erro') {
       fim();
-      erroBib(!navigator.onLine ? 'Sem internet não dá para baixar a biblioteca. Toque de novo quando voltar: continua de onde parou.'
-        : 'O download falhou: ' + d.erro + '. Toque de novo: continua de onde parou.');
+      erroBib(p.chave, !navigator.onLine ? 'Sem internet não dá para baixar a biblioteca. Toque de novo quando voltar: continua de onde parou.'
+        : 'O download falhou: ' + m.erro + '. Toque de novo: continua de onde parou.');
     }
   };
-  w.postMessage({ nome: PACOTE.nome, base: PACOTE.base, partes: indice.partes, bytes: indice.bytes,
-    pular: Number(localStorage.getItem('kit_bib_parcial')) || 0 });
+  w.postMessage({ nome: p.nome, base: p.base, partes: indice.partes, bytes: indice.bytes,
+    pular: Number(localStorage.getItem(p.guarda + '_parcial')) || 0 });
 }
 
-function erroBib(t) { const c = $('#erroBib'); c.hidden = false; c.textContent = t; EST.medidas.erroBib = t.slice(0, 200); }
+function erroBib(ch, t) {
+  const d = EST.bibs[ch].dom; if (d) { d.erro.hidden = false; d.erro.textContent = t; }
+  EST.medidas.erroBib = (pacote(ch).curto + ': ' + t).slice(0, 200);
+}
+
+/* um cartão por pacote: baixar, acompanhar, ou ver que já está guardado */
+function montarPacotes() {
+  const caixa = $('#listaPacotes'); caixa.replaceChildren();
+  for (const p of PACOTES) {
+    const d = EST.bibs[p.chave].dom = {
+      estado: el('p'),
+      botao: el('button', { class: 'btn pri largo', type: 'button', onclick: () => baixarBiblioteca(p.chave) }),
+      barra: el('i'), texto: el('div', { class: 'mini fraco', role: 'status' }),
+      erro: el('div', { class: 'aviso ruim', hidden: true })
+    };
+    d.prog = el('div', { hidden: true }, el('div', { class: 'barra' }, d.barra), d.texto);
+    caixa.append(el('div', { class: 'cartao' }, el('h2', { text: p.titulo }), d.estado, d.botao, d.prog, d.erro));
+  }
+  desenharPacotes();
+}
+function desenharPacotes() {
+  for (const p of PACOTES) {
+    const b = EST.bibs[p.chave], d = b.dom; if (!d) continue;
+    d.estado.className = b.pronta ? 'ok-txt' : 'fraco';
+    d.estado.textContent = b.pronta
+      ? '✓ Guardado no aparelho · ' + b.artigos.toLocaleString('pt-BR') + ' artigos'
+      : p.descricao + ' ' + mb(p.bytes) + '.';
+    d.botao.hidden = b.pronta || b.baixando;
+    d.botao.textContent = 'Baixar · ' + mb(p.bytes);
+    d.prog.hidden = !b.baixando;
+  }
+}
 
 function desenharBiblioteca() {
-  $('#bibBaixar').hidden = EST.bib.pronta;
-  $('#bibPronta').hidden = !EST.bib.pronta;
-  $('#chaveBib').hidden = !EST.bib.pronta || $('#conversa').hidden;
-  if (EST.bib.pronta) $('#bibResumo').textContent = PACOTE.titulo + ' · ' + EST.bib.artigos.toLocaleString('pt-BR') + ' artigos guardados no aparelho';
+  const tem = EST.bib.pronta;
+  $('#bibPronta').hidden = !tem;
+  $('#bibTitulo').textContent = tem ? 'Pacotes' : 'Biblioteca sem internet';
+  $('#bibIntro').hidden = tem;
+  $('#chaveBib').hidden = !tem || $('#conversa').hidden;
+  if (tem) $('#bibResumo').textContent = prontos().map(p => p.curto + ' · ' + EST.bibs[p.chave].artigos.toLocaleString('pt-BR') + ' artigos').join('  ·  ') + ', guardados no aparelho';
+  desenharPacotes();
   desenharAparelho();
 }
 
-/* procura por título e por texto, e junta os dois */
+/* procura por título e por texto em cada pacote guardado, e junta tudo */
 async function procurar(texto, quantos) {
   const vistos = new Map();
-  const junta = lista => (lista || []).forEach(x => { if (x && x.path && !vistos.has(x.path)) vistos.set(x.path, { caminho: x.path, titulo: x.title || x.path }); });
-  try { junta((await zim('suggest', { text: texto, numResults: 6 })).suggestions); } catch (_) {}
-  try { junta((await zim('search', { text: texto, numResults: quantos || 12 })).results); } catch (_) {}
+  const junta = (lista, pac) => (lista || []).forEach(x => {
+    if (!x || !x.path) return;
+    const titulo = x.title || x.path, ch = semAcento(titulo);
+    if (!vistos.has(ch)) vistos.set(ch, { caminho: x.path, titulo, pac });
+  });
+  /* primeiro os títulos que batem, de todos os pacotes; depois o que só cita a palavra no texto */
+  for (const p of prontos()) { try { junta((await zim(p.chave, 'suggest', { text: texto, numResults: 6 })).suggestions, p.chave); } catch (_) {} }
+  for (const p of prontos()) { try { junta((await zim(p.chave, 'search', { text: texto, numResults: quantos || 12 })).results, p.chave); } catch (_) {} }
   return [...vistos.values()];
 }
 
 async function buscarNaTela(texto) {
   const lista = $('#resultados'); const art = $('#artigo');
-  art.hidden = true; lista.hidden = false; lista.replaceChildren(el('div', { class: 'fraco', text: 'Procurando…' }));
+  art.hidden = true; lista.hidden = false; $('#bibPacotes').hidden = false;
+  lista.replaceChildren(el('div', { class: 'fraco', text: 'Procurando…' }));
   const achados = await procurar(texto, 14);
   lista.replaceChildren();
   if (!achados.length) { lista.append(el('div', { class: 'fraco', text: 'Nada encontrado para “' + texto + '”.' })); return; }
-  for (const a of achados) lista.append(el('button', { class: 'resultado', type: 'button', text: a.titulo, onclick: () => abrirArtigo(a.caminho) }));
+  const varios = prontos().length > 1;
+  for (const a of achados) lista.append(el('button', { class: 'resultado', type: 'button', onclick: () => abrirArtigo(a.caminho, a.pac) },
+    a.titulo, varios ? el('span', { class: 'd', text: pacote(a.pac).curto }) : null));
 }
 
-async function lerArtigo(caminho) {
-  const r = await zim('getEntryByPath', { path: caminho, follow: true });
+async function lerArtigo(caminho, pac) {
+  pac = pac || (prontos()[0] || {}).chave;
+  const r = await zim(pac, 'getEntryByPath', { path: caminho, follow: true });
   if (!r || !r.content || !r.content.length) return null;
   if (r.mimetype && !/html/i.test(r.mimetype)) return null;
   const doc = new DOMParser().parseFromString(new TextDecoder('utf-8').decode(r.content), 'text/html');
@@ -649,16 +709,16 @@ async function lerArtigo(caminho) {
     if (n.tagName === 'P' && t.length < 25) return;
     blocos.push({ tipo: n.tagName === 'P' ? 'p' : 'li', texto: t, secao, sub, ordem: ordem++ });
   });
-  return { titulo, caminho, blocos };
+  return { titulo, caminho, pac, blocos };
 }
 
-async function abrirArtigo(caminho) {
+async function abrirArtigo(caminho, pac) {
   const lista = $('#resultados'); const art = $('#artigo');
-  art.hidden = false; lista.hidden = true;
+  art.hidden = false; lista.hidden = true; $('#bibPacotes').hidden = true;
   art.replaceChildren(el('div', { class: 'fraco', text: 'Abrindo…' }));
   let a = null;
-  try { a = await lerArtigo(caminho); } catch (e) { console.warn(e); }
-  art.replaceChildren(el('button', { class: 'link', type: 'button', text: '← voltar', onclick: () => { art.hidden = true; lista.hidden = false; } }));
+  try { a = await lerArtigo(caminho, pac); } catch (e) { console.warn(e); }
+  art.replaceChildren(el('button', { class: 'link', type: 'button', text: '← voltar', onclick: () => { art.hidden = true; lista.hidden = false; $('#bibPacotes').hidden = false; } }));
   if (!a) { art.append(el('p', { class: 'fraco', text: 'Não consegui abrir este artigo.' })); return; }
   art.append(el('h1', { text: a.titulo }));
   let ul = null;
@@ -721,26 +781,40 @@ async function consultarBiblioteca(pergunta) {
   const chaves = palavrasChave(pergunta);
   if (!chaves.length) return { contexto: '', fontes: [] };
 
+  /* candidatos de todos os pacotes guardados; o de medicina leva um empurrão,
+     porque a Wikipédia geral tem muito artigo que só cita a palavra */
   const cand = new Map();
-  const soma = (lista, base) => (lista || []).forEach((x, i) => {
-    if (!x || !x.path) return;
-    const c = cand.get(x.path) || { caminho: x.path, titulo: x.title || '', pts: 0 };
-    c.pts += Math.max(0, base - i * 0.4);
-    cand.set(x.path, c);
-  });
-
-  try { soma((await zim('search', { text: chaves.map(c => c.orig).join(' '), numResults: 8 })).results, 4); } catch (_) {}
-  for (const c of chaves.slice().sort((x, y) => y.norm.length - x.norm.length).slice(0, 3)) {
-    try { soma((await zim('suggest', { text: c.orig, numResults: 4 })).suggestions, 3); } catch (_) {}
-  }
-  for (const c of cand.values()) {
-    const t = semAcento(c.titulo);
-    for (const k of chaves) {
-      if (t === k.norm) c.pts += 8;
-      else if (t.split(/[^a-z0-9]+/).some(w => w.startsWith(k.raiz))) c.pts += 3;
+  for (const p of prontos()) {
+    const soma = (lista, base) => (lista || []).forEach((x, i) => {
+      if (!x || !x.path) return;
+      const ch = p.chave + '|' + x.path;
+      const c = cand.get(ch) || { caminho: x.path, titulo: x.title || '', pac: p.chave, pts: p.chave === 'medicina' ? 1 : 0 };
+      c.pts += Math.max(0, base - i * 0.4);
+      cand.set(ch, c);
+    });
+    try { soma((await zim(p.chave, 'search', { text: chaves.map(c => c.orig).join(' '), numResults: 8 })).results, 4); } catch (_) {}
+    for (const c of chaves.slice().sort((x, y) => y.norm.length - x.norm.length).slice(0, 3)) {
+      /* pelo começo da palavra: "purificar" também acha "Purificação" */
+      try { soma((await zim(p.chave, 'suggest', { text: c.orig.slice(0, Math.max(4, c.raiz.length)), numResults: 4 })).suggestions, 3); } catch (_) {}
     }
   }
-  const ordem = [...cand.values()].sort((x, y) => y.pts - x.pts);
+  /* título que junta as palavras da pergunta vale mais que título igual a uma só:
+     "Santos Dumont" ganha de "Santos" quando a pergunta fala nos dois */
+  for (const c of cand.values()) {
+    const t = semAcento(c.titulo), palavras = t.split(/[^a-z0-9]+/);
+    let bate = 0, exato = false;
+    for (const k of chaves) {
+      if (t === k.norm) exato = true;
+      if (palavras.some(w => w.startsWith(k.raiz))) bate++;
+    }
+    c.pts += 5 * bate + (exato ? 3 : 0) + (bate > 1 && bate === chaves.length ? 6 : 0);
+  }
+  /* o mesmo artigo pode estar nos dois pacotes: fica o de mais pontos */
+  const porTitulo = new Map();
+  for (const c of [...cand.values()].sort((x, y) => y.pts - x.pts)) {
+    const t = semAcento(c.titulo); if (!porTitulo.has(t)) porTitulo.set(t, c);
+  }
+  const ordem = [...porTitulo.values()];
   if (!ordem.length) return { contexto: '', fontes: [] };
 
   const usar = [ordem[0]];
@@ -749,12 +823,13 @@ async function consultarBiblioteca(pergunta) {
   const partes = [], fontes = [];
   for (let i = 0; i < usar.length; i++) {
     let a = null;
-    try { a = await lerArtigo(usar[i].caminho); } catch (_) {}
+    try { a = await lerArtigo(usar[i].caminho, usar[i].pac); } catch (_) {}
     if (!a) continue;
+    if (fontes.some(f => f.titulo === a.titulo)) continue;   // dois caminhos que dão no mesmo artigo
     const trecho = escolherTrechos(a.blocos, chaves, i === 0 ? 2400 : 900);
     if (!trecho) continue;
     partes.push('Trecho do artigo “' + a.titulo + '”:\n' + trecho);
-    fontes.push({ titulo: a.titulo, caminho: a.caminho });
+    fontes.push({ titulo: a.titulo, caminho: a.caminho, pac: a.pac });
   }
   return { contexto: partes.join('\n\n'), fontes };
 }
@@ -777,7 +852,7 @@ function desenharAparelho() {
     linha(algumaIA.length ? 'ok' : 'nao', 'A IA está guardada no aparelho',
       algumaIA.length ? algumaIA.map(i => i.nome).join(', ') : 'Baixe na aba Conversa.'),
     linha(EST.bib.pronta ? 'ok' : 'meh', 'A biblioteca está guardada no aparelho',
-      EST.bib.pronta ? PACOTE.titulo : 'Opcional. Baixe na aba Biblioteca.'),
+      EST.bib.pronta ? prontos().map(p => p.titulo).join(' + ') : 'Opcional. Baixe na aba Biblioteca.'),
     linha(a.protegido || a.instalado ? 'ok' : 'meh', 'O aparelho não vai apagar esses arquivos sozinho',
       a.protegido || a.instalado ? null : 'Para garantir, instale o app no aparelho.')
   );
@@ -814,7 +889,7 @@ function montarRelatorio() {
     'última resposta: ' + (u.palavras != null
       ? u.palavras + ' palavras · ' + (u.palavrasSeg || '?') + ' palavras/s · ' + (u.tokensSeg || '?') + ' tokens/s · esperou ' + (u.esperaSeg || '?') + ' s'
       : 'nenhuma'),
-    'biblioteca: ' + (EST.bib.pronta ? PACOTE.titulo + ' · ' + EST.bib.artigos + ' artigos' : 'não baixada') +
+    'biblioteca: ' + (EST.bib.pronta ? prontos().map(p => p.curto + ' (' + EST.bibs[p.chave].artigos + ' artigos)').join(' + ') : 'não baixada') +
       (u.comBiblioteca ? ' · consulta ' + u.consultaMs + ' ms · fontes: ' + u.fontes : '') +
       (u.comFoto ? ' · a última pergunta foi com foto' : '')
   ];
@@ -826,10 +901,11 @@ function montarRelatorio() {
 async function apagarTudo() {
   if (!confirm('Apagar a IA e a biblioteca guardadas neste aparelho? Para usar de novo, será preciso baixar outra vez.')) return;
   try { if (EST.motor) await EST.motor.unload(); } catch (_) {}
-  try { if (EST.zim) EST.zim.terminate(); } catch (_) {}
+  for (const p of PACOTES) { try { if (EST.bibs[p.chave].zim) EST.bibs[p.chave].zim.terminate(); } catch (_) {} }
   for (const ia of IAS) for (const id of [ia.f16, ia.f32]) { try { await webllm.deleteModelAllInfoInCache(id); } catch (_) {} }
-  try { const raiz = await navigator.storage.getDirectory(); await raiz.removeEntry(PACOTE.nome); } catch (_) {}
-  ['kit_ia', 'kit_bib', 'kit_bib_parcial', 'kit_carregando'].forEach(esquecer);
+  for (const p of PACOTES) { try { const raiz = await navigator.storage.getDirectory(); await raiz.removeEntry(p.nome); } catch (_) {} }
+  ['kit_ia', 'kit_carregando'].forEach(esquecer);
+  for (const p of PACOTES) { esquecer(p.guarda); esquecer(p.guarda + '_parcial'); }
   recarregar();
 }
 
@@ -963,7 +1039,6 @@ async function partida() {
   $('#btnFoto').addEventListener('click', () => $('#campoFoto').click());
   $('#campoFoto').addEventListener('change', e => escolherFoto(e.target.files && e.target.files[0]));
   $('#btnTirarFoto').addEventListener('click', tirarFoto);
-  $('#btnBaixarBib').addEventListener('click', baixarBiblioteca);
   $('#formBusca').addEventListener('submit', e => { e.preventDefault(); const q = $('#campoBusca').value.trim(); if (q) buscarNaTela(q); });
   $('#btnCopiar').addEventListener('click', async () => {
     const t = montarRelatorio();
@@ -997,7 +1072,7 @@ async function partida() {
   await examinarAparelho();
   await verGuardadas();
   await verPaginaGuardada();
-  $('#bibPeso').textContent = mb(PACOTE.bytes);
+  montarPacotes();
 
   if (!EST.aparelho.gpu) {
     const c = $('#avisoSemGPU'); c.hidden = false;
@@ -1013,6 +1088,6 @@ async function partida() {
 }
 
 /* porta de serviço para conferência */
-window.KIT = { EST, IAS, perguntar, escolherFoto, consultarBiblioteca, procurar, lerArtigo, montarRelatorio, avisarSW, palavrasChave, plataforma, cartaoInstalar };
+window.KIT = { EST, IAS, PACOTES, perguntar, escolherFoto, baixarBiblioteca, consultarBiblioteca, procurar, lerArtigo, montarRelatorio, avisarSW, palavrasChave, plataforma, cartaoInstalar };
 
 partida();

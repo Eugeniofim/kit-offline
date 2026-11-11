@@ -145,6 +145,10 @@
   .busca input{flex:1; min-height:48px; padding:0 14px; border-radius:14px; background:var(--chao); border:1px solid var(--linha)}
   .resultados{display:grid; gap:8px}
   .resultado{text-align:left; min-height:48px; padding:10px 14px; border-radius:12px; background:var(--chao); border:1px solid var(--linha)}
+  .resultado .d{display:block; font-size:12px; color:var(--fraco)}
+  .ok-txt{color:var(--ok); font-weight:600}
+  #bibPronta{margin-bottom:18px}
+  #bibPacotes .cartao .btn{margin-top:4px}
   .artigo h1{font-size:24px; margin:8px 0 12px}
   .artigo h2{font-size:19px; margin:22px 0 8px; padding-top:12px; border-top:1px solid var(--linha)}
   .artigo h3{font-size:16px; margin:16px 0 6px; color:var(--fraco)}
@@ -224,21 +228,6 @@
 
   <!-- BIBLIOTECA -->
   <section class="aba" id="abaBiblioteca" aria-label="Biblioteca">
-    <div id="bibBaixar">
-      <h1>Biblioteca sem internet</h1>
-      <p class="fraco">Os pacotes vêm do Kiwix, o projeto que guarda a Wikipédia para ler offline.</p>
-      <div class="cartao">
-        <h2>Medicina</h2>
-        <p class="fraco">Wikipédia de medicina em português, sem imagens. <span id="bibPeso">116 MB</span>.</p>
-        <button class="btn pri largo" id="btnBaixarBib">Baixar a biblioteca</button>
-        <div id="progressoBib" hidden>
-          <div class="barra"><i id="barraBib"></i></div>
-          <div class="mini fraco" id="textoBib" role="status"></div>
-        </div>
-        <div id="erroBib" class="aviso ruim" hidden></div>
-      </div>
-    </div>
-
     <div id="bibPronta" hidden>
       <form class="busca" id="formBusca">
         <input id="campoBusca" type="search" placeholder="Procurar na biblioteca" autocomplete="off" enterkeyhint="search" aria-label="Procurar na biblioteca">
@@ -247,6 +236,12 @@
       <div class="mini fraco" id="bibResumo"></div>
       <div class="resultados" id="resultados"></div>
       <article class="artigo" id="artigo" hidden></article>
+    </div>
+
+    <div id="bibPacotes">
+      <h1 id="bibTitulo">Biblioteca sem internet</h1>
+      <p class="fraco" id="bibIntro">Os pacotes vêm do Kiwix, o projeto que guarda a Wikipédia para ler offline.</p>
+      <div id="listaPacotes"></div>
     </div>
   </section>
 
