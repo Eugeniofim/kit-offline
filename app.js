@@ -6,7 +6,7 @@
 
 import * as webllm from './vendor/web-llm.js';
 
-const VERSAO = '0.4.0';
+const VERSAO = '0.4.1';
 const $ = s => document.querySelector(s);
 
 /* ───────── catálogo ───────── */

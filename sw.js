@@ -2,7 +2,7 @@
    Guarda a página inteira no aparelho para abrir sem internet.
    A IA e a biblioteca NÃO passam por aqui: cada uma guarda os próprios arquivos. */
 
-const CACHE = 'kit-offline-v4';   /* SUBIR ESTE NÚMERO A CADA PUBLICAÇÃO */
+const CACHE = 'kit-offline-v5';   /* SUBIR ESTE NÚMERO A CADA PUBLICAÇÃO */
 const ESSENCIAL = [
   './',
   './index.html',
